@@ -1,4 +1,6 @@
-const BASE_URL = 'https://api.stru.ai' 
+const BASE_URL = process.env.REACT_APP_ENV === 'production' 
+  ? 'https://api.stru.ai' 
+  : 'http://localhost:8000';
 
 const API = {
   login: async (username) => {
