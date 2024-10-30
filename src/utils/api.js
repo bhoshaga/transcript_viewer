@@ -2,55 +2,73 @@ const BASE_URL = process.env.REACT_APP_ENV === 'production'
   ? 'https://api.stru.ai' 
   : 'http://localhost:8000';
 
+// Common fetch options for all requests
+const createFetchOptions = (method, username, body = null) => {
+  const options = {
+    method,
+    credentials: 'include',  // Important for CORS with credentials
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Username': username,
+    },
+  };
+
+  if (body) {
+    options.body = JSON.stringify(body);
+  }
+
+  return options;
+};
+
+const handleResponse = async (response) => {
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(errorText || response.statusText);
+  }
+  return response.json();
+};
+
 const API = {
   login: async (username) => {
-    const response = await fetch(`${BASE_URL}/api/auth/login`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ username }),
-    });
-    if (!response.ok) throw new Error('Login failed');
-    return response.json();
+    const response = await fetch(`${BASE_URL}/api/auth/login`, 
+      createFetchOptions('POST', username, { username })
+    );
+    return handleResponse(response);
   },
 
   logout: async (username) => {
-    const response = await fetch(`${BASE_URL}/api/auth/logout`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ username }),
-    });
-    if (!response.ok) throw new Error('Logout failed');
-    return response.json();
+    const response = await fetch(`${BASE_URL}/api/auth/logout`,
+      createFetchOptions('POST', username, { username })
+    );
+    return handleResponse(response);
   },
 
   getUserMeetings: async (username) => {
-    const response = await fetch(`${BASE_URL}/api/meetings/user`, {
-      headers: {
-        'X-Username': username,
-      },
-    });
-    if (!response.ok) throw new Error('Failed to fetch meetings');
-    return response.json();
+    const response = await fetch(`${BASE_URL}/api/meetings/user`,
+      createFetchOptions('GET', username)
+    );
+    return handleResponse(response);
+  },
+
+  createMeeting: async (name, creator) => {
+    const response = await fetch(`${BASE_URL}/api/meetings/create`,
+      createFetchOptions('POST', creator, { name, creator })
+    );
+    return handleResponse(response);
   },
 
   joinMeeting: async (meetingId, username) => {
-    const response = await fetch(`${BASE_URL}/api/meetings/${meetingId}/participants/add`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Username': username,
-      },
-      body: JSON.stringify({
-        username,
-        meeting_id: meetingId,
-      }),
-    });
-    if (!response.ok) throw new Error('Failed to join meeting');
-    return response.json();
+    const response = await fetch(`${BASE_URL}/api/meetings/${meetingId}/participants/add`,
+      createFetchOptions('POST', username, { username, meeting_id: meetingId })
+    );
+    return handleResponse(response);
+  },
+
+  endMeeting: async (meetingId, username) => {
+    const response = await fetch(`${BASE_URL}/api/meetings/${meetingId}/end`,
+      createFetchOptions('POST', username)
+    );
+    return handleResponse(response);
   },
 };
 

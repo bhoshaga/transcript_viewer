@@ -18,8 +18,17 @@ class TranscriptWebSocket {
       this.ws.close();
     }
 
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = process.env.REACT_APP_ENV === 'production'
+      ? `wss://api.stru.ai/ws/meetings/${this.meetingId}/transcript`
+      : `ws://localhost:8000/ws/meetings/${this.meetingId}/transcript`;
+
     try {
-      this.ws = new WebSocket(`${WS_BASE}/${this.meetingId}/transcript?user=${this.username}`);
+      // Add username as a query parameter
+      const url = new URL(wsUrl);
+      url.searchParams.append('user', this.username);
+
+      this.ws = new WebSocket(url.toString());
       this.setupEventListeners();
       this.handlers.onDebugLog('Connecting to WebSocket...', 'info');
     } catch (error) {
