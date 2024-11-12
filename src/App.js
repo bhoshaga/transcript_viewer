@@ -2,7 +2,13 @@ import React, { useState, useEffect, useRef } from 'react';
 import { createMessageHandler, formatTimestamp } from './transcriptHandlers';
 import Login from './Login';
 import MeetingCard from './MeetingCard';
+import ConnectionStatus from './ConnectionStatus';
 import './App.css';
+
+// Add this utility function at the top of your file
+function isEqual(obj1, obj2) {
+  return JSON.stringify(obj1) === JSON.stringify(obj2);
+}
 
 const BASE_URL = process.env.REACT_APP_ENV === 'production' 
   ? 'https://api.stru.ai' 
@@ -42,6 +48,42 @@ const MeetingsViewer = () => {
     setSelectedMeeting(null);
     if (wsRef.current) {
       wsRef.current.close();
+    }
+  };
+
+  const handleEndMeeting = async (meeting) => {
+    try {
+      const response = await fetch(`${BASE_URL}/api/meetings/${meeting.id}/end`, {
+        method: 'POST',
+        headers: {
+          'X-Username': username
+        }
+      });
+  
+      if (!response.ok) {
+        throw new Error('Failed to end meeting');
+      }
+  
+      // Update local meetings state
+      setMeetings(prev => prev.map(m => 
+        m.id === meeting.id 
+          ? { ...m, is_active: false, end_time: new Date().toISOString(), end_reason: "Manually ended by creator" }
+          : m
+      ));
+  
+      // If we're viewing this meeting, update the view
+      if (selectedMeeting?.id === meeting.id) {
+        setSelectedMeeting(prev => ({
+          ...prev,
+          is_active: false,
+          end_time: new Date().toISOString(),
+          end_reason: "Manually ended by creator"
+        }));
+        setMeetingEnded(true);
+      }
+    } catch (err) {
+      console.error('Error ending meeting:', err);
+      setError('Failed to end meeting: ' + err.message);
     }
   };
 
@@ -96,6 +138,50 @@ const MeetingsViewer = () => {
     fetchMeetings();
   }, [username]);
 
+  useEffect(() => {
+    if (!username) return;
+  
+    const fetchLatestMeetings = async () => {
+      try {
+        const response = await fetch(`${BASE_URL}/api/meetings/user`, {
+          headers: {
+            'X-Username': username
+          }
+        });
+  
+        if (!response.ok) {
+          throw new Error('Failed to fetch meetings');
+        }
+  
+        const data = await response.json();
+        
+        // Update meetings while preserving selected meeting details
+        setMeetings(currentMeetings => {
+          const updatedMeetings = data.map(newMeeting => {
+            const existingMeeting = currentMeetings.find(m => m.id === newMeeting.id);
+            return existingMeeting ? { ...existingMeeting, ...newMeeting } : newMeeting;
+          });
+          
+          // If we have a selected meeting, update its details too
+          if (selectedMeeting) {
+            const updatedSelectedMeeting = data.find(m => m.id === selectedMeeting.id);
+            if (updatedSelectedMeeting && !isEqual(updatedSelectedMeeting, selectedMeeting)) {
+              setSelectedMeeting(updatedSelectedMeeting);
+            }
+          }
+          
+          return updatedMeetings;
+        });
+      } catch (err) {
+        console.error('Error fetching latest meetings:', err);
+      }
+    };
+  
+    const intervalId = setInterval(fetchLatestMeetings, 4000);
+  
+    return () => clearInterval(intervalId);
+  }, [username, selectedMeeting]);
+
   // Fetch meeting data when selected
   useEffect(() => {
     const fetchMeetingData = async () => {
@@ -121,6 +207,7 @@ const MeetingsViewer = () => {
         
         setTranscriptHistory(transcriptData.history || []);
         setActiveSegments(transcriptData.active_segments || {});
+        setMeetingEnded(!transcriptData.is_active);
 
         const participantsResponse = await fetch(
           `${BASE_URL}/api/meetings/${selectedMeeting.id}/participants`,
@@ -308,6 +395,7 @@ const MeetingsViewer = () => {
                   meeting={meeting}
                   username={username}
                   onDelete={handleDeleteClick}
+                  onEndMeeting={handleEndMeeting}
                   onClick={() => setSelectedMeeting(meeting)}
                 />
               ))}
@@ -353,13 +441,18 @@ const MeetingsViewer = () => {
               </button>
               <h1>{selectedMeeting.name}</h1>
             </div>
-            <div className="connection-status">
-              {connected ? (
-                <span className="status-connected">Connected</span>
-              ) : (
-                <span className="status-disconnected">Disconnected</span>
-              )}
-            </div>
+            <ConnectionStatus 
+              websocket={wsRef.current}
+              isActive={selectedMeeting.is_active} 
+              onReconnect={async () => {
+                if (wsRef.current) {
+                  wsRef.current.close();
+                  wsRef.current = null;
+                }
+                // This will trigger the useEffect to reconnect
+                setConnected(false);
+              }}
+            />
           </div>
 
           <div className="main-content">

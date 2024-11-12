@@ -1,13 +1,23 @@
-import React from 'react';
+// MeetingCard.js
+import React, { useState } from 'react';
 
-const MeetingCard = ({ meeting, username, onDelete, onClick }) => {
+const MeetingCard = ({ meeting, username, onDelete, onEndMeeting, onClick }) => {
+  const [isEnding, setIsEnding] = useState(false);
+
   const handleDeleteClick = (e) => {
     e.stopPropagation();
     onDelete(meeting);
   };
 
+  const handleEndMeetingClick = async (e) => {
+    e.stopPropagation();
+    setIsEnding(true);
+    await onEndMeeting(meeting);
+    setIsEnding(false);
+  };
+
   return (
-    <div 
+    <div
       className={`meeting-card ${meeting.is_active ? 'active' : 'ended'}`}
       onClick={onClick}
     >
@@ -22,14 +32,26 @@ const MeetingCard = ({ meeting, username, onDelete, onClick }) => {
           )}
         </div>
         {meeting.creator === username && (
-          <button
-            className="delete-button"
-            onClick={handleDeleteClick}
-            title="Delete meeting"
-            aria-label="Delete meeting"
-          >
-            ×
-          </button>
+          meeting.is_active ? (
+            <button
+              className="end-meeting-button"
+              onClick={handleEndMeetingClick}
+              disabled={isEnding}
+              title="End meeting"
+              aria-label="End meeting"
+            >
+              {isEnding ? '...' : 'End'} {/* Using a stop symbol or you could use 'End' */}
+            </button>
+          ) : (
+            <button
+              className="delete-button"
+              onClick={handleDeleteClick}
+              title="Delete meeting"
+              aria-label="Delete meeting"
+            >
+              ×
+            </button>
+          )
         )}
       </div>
       <div className="meeting-info">
@@ -53,6 +75,12 @@ const MeetingCard = ({ meeting, username, onDelete, onClick }) => {
           <p>
             <span>Ended</span>
             <span>{new Date(meeting.end_time).toLocaleString()}</span>
+          </p>
+        )}
+        {meeting.end_reason && (
+          <p>
+            <span>End Reason</span>
+            <span>{meeting.end_reason}</span>
           </p>
         )}
       </div>

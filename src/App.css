@@ -1,3 +1,19 @@
+/*
+ * Teams Transcript Viewer Styles
+ * ----------------------------
+ * Table of Contents:
+ * 1. Variables
+ * 2. Base Styles
+ * 3. Layout Components
+ * 4. Meeting Cards
+ * 5. Transcript Components
+ * 6. Status Indicators & Animations
+ * 7. Modal & Overlays
+ * 8. Utility Classes
+ * 9. Responsive Design
+ */
+
+/* 1. Variables */
 :root {
   --bg-primary: #1a1b1e;
   --bg-secondary: #2c2d31;
@@ -368,49 +384,81 @@ body {
 
 /* Status Indicators */
 .connection-status {
+  cursor: pointer;
+  user-select: none;
   padding: 0.625rem 1.25rem;
   border-radius: var(--border-radius);
-  font-size: 0.875rem;
-  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.connection-pulse {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.status-connected .connection-pulse {
+  background-color: var(--success);
+  animation: softPulse 2s infinite;
+}
+
+.status-connected .connection-pulse.checking {
+  animation: quickPulse 0.5s ease-in-out;
+}
+
+.status-disconnected .connection-pulse {
+  background-color: var(--error);
+}
+
+.reconnecting .connection-pulse {
+  background-color: white;
+  animation: quickPulse 1s infinite;
+}
+
+@keyframes softPulse {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.1);
+    opacity: 0.8;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes quickPulse {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.2);
+    opacity: 0.5;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
 }
 
 .status-connected {
   background-color: rgba(34, 197, 94, 0.15);
   color: var(--success);
-  padding: 0.625rem 1.25rem;
-  border-radius: var(--border-radius);
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
 }
 
-.status-connected::before {
-  content: "";
-  display: inline-block;
-  width: 8px;
-  height: 8px;
-  background-color: var(--success);
-  border-radius: 50%;
-}
 
 .status-disconnected {
   background-color: rgba(239, 68, 68, 0.15);
   color: var(--error);
-  padding: 0.625rem 1.25rem;
-  border-radius: var(--border-radius);
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
 }
 
-.status-disconnected::before {
-  content: "";
-  display: inline-block;
-  width: 8px;
-  height: 8px;
-  background-color: var(--error);
-  border-radius: 50%;
-}
 
 /* Modal */
 .modal-overlay {
@@ -646,4 +694,74 @@ body {
 @keyframes slideDown {
   from { transform: translateY(-100%); }
   to { transform: translateY(0); }
+}
+
+
+.status-connected .status-dot {
+  background-color: var(--success);
+  animation: pulse 2s infinite;
+}
+
+.status-disconnected .status-dot {
+  background-color: var(--error);
+}
+
+/* End Meeting Button */
+.end-meeting-button {
+  position: absolute;
+  top: -0.5rem;
+  right: -0.5rem;
+  width: 2rem;  /* Same as delete button */
+  height: 2rem; /* Same as delete button */
+  border-radius: 50%;
+  background-color: rgba(239, 68, 68, 0.1);  /* Subtle red background like delete button */
+  border: none;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: var(--transition);
+  opacity: 0;
+  transform: scale(0.8);
+  z-index: 2;
+  font-size: 0;  /* Hide any text content */
+  font-weight: 500;
+}
+
+.meeting-card:hover .end-meeting-button {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.end-meeting-button:hover {
+  background-color: var(--error);
+  filter: brightness(1.1);
+}
+
+.end-meeting-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.end-meeting-button:hover:not(:disabled) {
+  background-color: var(--error);
+  color: white;
+}
+
+.end-meeting-button::before {
+  content: '';
+  width: 10px;
+  height: 10px;
+  background-color: var(--text-secondary);
+  display: block;
+  transition: var(--transition);
+}
+
+.end-meeting-button:hover::before {
+  background-color: white;
+}
+
+.end-meeting-button:disabled::before {
+  opacity: 0.5;
 }
