@@ -393,7 +393,7 @@ const MeetingsViewer = () => {
                       <div className="segment-header">
                         <span className="speaker">{segment.speaker}</span>
                         <span className="timestamp">
-                          {formatTimestamp(segment.call_time)}
+                          {formatTimestamp(segment.call_time, segment.capture_time)}
                         </span>
                       </div>
                       <div className="segment-content">{segment.text}</div>
@@ -405,7 +405,7 @@ const MeetingsViewer = () => {
                       <div className="segment-header">
                         <span className="speaker">{segment.speaker}</span>
                         <span className="timestamp">
-                          {formatTimestamp(segment.call_time)}
+                          {formatTimestamp(segment.call_time, segment.capture_time)}
                         </span>
                       </div>
                       <div className="segment-content">{segment.text}</div>

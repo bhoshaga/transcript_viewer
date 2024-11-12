@@ -1,5 +1,3 @@
-// transcriptHandlers.js
-
 export const createMessageHandler = (
     setTranscriptHistory,
     setActiveSegments,
@@ -112,6 +110,36 @@ export const createMessageHandler = (
     return { handleWebSocketMessage };
   };
   
-  export const formatTimestamp = (timestamp) => {
-    return new Date(timestamp).toLocaleTimeString();
+  export const formatTimestamp = (callTime, captureTime) => {
+    try {
+      // First, check if callTime is in duration format (HH:MM)
+      const durationRegex = /^\d{2}:\d{2}$/;
+      if (durationRegex.test(callTime)) {
+        // Case 1: Duration format
+        // Format capture_time
+        const captureDateTime = new Date(captureTime);
+        const formattedCaptureTime = captureDateTime.toLocaleTimeString(undefined, {
+          hour: 'numeric',
+          minute: '2-digit',
+          second: '2-digit',
+          hour12: true
+        });
+        
+        // Combine duration and capture time
+        return `${callTime} - ${formattedCaptureTime}`;
+      } else {
+        // Case 2: ISO timestamp format
+        // In this case, just show the capture time
+        const captureDateTime = new Date(captureTime);
+        return captureDateTime.toLocaleTimeString(undefined, {
+          hour: 'numeric',
+          minute: '2-digit',
+          second: '2-digit',
+          hour12: true
+        });
+      }
+    } catch (error) {
+      console.error('Error formatting timestamp:', error);
+      return 'Invalid Timestamp';
+    }
   };
