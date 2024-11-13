@@ -391,6 +391,7 @@ body {
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  transition: var(--transition);
 }
 
 .connection-pulse {
@@ -413,9 +414,14 @@ body {
   background-color: var(--error);
 }
 
+.reconnecting {
+  background-color: rgba(255, 255, 255, 0.15) !important;
+  color: white !important;
+}
+
 .reconnecting .connection-pulse {
-  background-color: white;
-  animation: quickPulse 1s infinite;
+  background-color: white !important;
+  animation: quickPulse 1s infinite !important;
 }
 
 @keyframes softPulse {
