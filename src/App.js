@@ -240,23 +240,23 @@ const MeetingsViewer = () => {
   // WebSocket connection
   useEffect(() => {
     if (!selectedMeeting || !username) return;
-
+  
     const connectWebSocket = () => {
       const ws = new WebSocket(
         `${WS_BASE_URL}/ws/meetings/${selectedMeeting.id}/transcript?user=${username}`
       );
-
+  
       ws.onopen = () => {
         console.log('Connected to WebSocket');
         setConnected(true);
         setError(null);
       };
-
+  
       ws.onmessage = (event) => {
         const data = JSON.parse(event.data);
         handleWebSocketMessage(data);
       };
-
+  
       ws.onclose = () => {
         console.log('Disconnected from WebSocket');
         setConnected(false);
@@ -264,25 +264,25 @@ const MeetingsViewer = () => {
           setTimeout(connectWebSocket, 5000);
         }
       };
-
+  
       ws.onerror = (error) => {
         console.error('WebSocket error:', error);
         setError('WebSocket connection error');
       };
-
+  
       wsRef.current = ws;
     };
-
+  
     if (!loading) {
       connectWebSocket();
     }
-
+  
     return () => {
       if (wsRef.current) {
         wsRef.current.close();
       }
     };
-  }, [selectedMeeting, loading, username]);
+  }, [selectedMeeting, loading, username, handleWebSocketMessage]); // Added handleWebSocketMessage to dependencies
 
   // Auto-scroll effect
   useEffect(() => {
