@@ -1,0 +1,11 @@
+export const API_BASE_URL = 'https://api.stru.ai';
+export const WS_BASE_URL = 'wss://api.stru.ai';
+
+export const CONFIG = {
+  HEARTBEAT_INTERVAL: 30000,
+  MAX_MISSED_HEARTBEATS: 3,
+  MAX_RECONNECT_ATTEMPTS: 5,
+  RECONNECT_BASE_DELAY: 1000,
+  MAX_RECONNECT_DELAY: 30000,
+  MEETINGS_REFRESH_INTERVAL: 5000
+};
