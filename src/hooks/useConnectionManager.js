@@ -101,6 +101,13 @@ export const useConnectionManager = (meeting, username) => {
             case 'participant_update':
               setParticipants(data.data.participants);
               break;
+            case 'heartbeat':
+              // Send heartbeat acknowledgment
+              if (ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: "heartbeat_ack" }));
+                console.log('Heartbeat acknowledgment sent');
+              }
+              break;
             case 'heartbeat_ack':
               missedHeartbeatsRef.current = 0;
               break;
