@@ -1,6 +1,19 @@
 import React, { memo } from 'react';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from './ui/alert-dialog';
-import { formatDistanceToNow } from 'date-fns';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+         AlertDialogDescription, AlertDialogFooter, AlertDialogHeader,
+         AlertDialogTitle } from './ui/alert-dialog';
+
+const formatDateTime = (dateString) => {
+  const date = new Date(dateString);
+  return date.toLocaleString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true
+  });
+};
 
 const MeetingCard = memo(({ meeting, username, onUpdate, onClick }) => {
   const [showDeleteDialog, setShowDeleteDialog] = React.useState(false);
@@ -23,8 +36,8 @@ const MeetingCard = memo(({ meeting, username, onUpdate, onClick }) => {
 
       if (!response.ok) throw new Error('Failed to end meeting');
 
-      onUpdate(prev => prev.map(m => 
-        m.id === meeting.id 
+      onUpdate(prev => prev.map(m =>
+        m.id === meeting.id
           ? { ...m, is_active: false, end_time: new Date().toISOString() }
           : m
       ));
@@ -62,7 +75,7 @@ const MeetingCard = memo(({ meeting, username, onUpdate, onClick }) => {
 
   return (
     <>
-      <div 
+      <div
         onClick={onClick}
         className={`
           bg-gray-800 p-6 rounded-lg border transition-all duration-200 cursor-pointer
@@ -92,7 +105,7 @@ const MeetingCard = memo(({ meeting, username, onUpdate, onClick }) => {
           <div className="flex justify-between text-gray-400">
             <span>Started</span>
             <span className="text-gray-300">
-              {formatDistanceToNow(new Date(meeting.start_time), { addSuffix: true })}
+              {formatDateTime(meeting.start_time)}
             </span>
           </div>
 
@@ -100,7 +113,7 @@ const MeetingCard = memo(({ meeting, username, onUpdate, onClick }) => {
             <div className="flex justify-between text-gray-400">
               <span>Ended</span>
               <span className="text-gray-300">
-                {formatDistanceToNow(new Date(meeting.end_time), { addSuffix: true })}
+                {formatDateTime(meeting.end_time)}
               </span>
             </div>
           )}
@@ -119,7 +132,7 @@ const MeetingCard = memo(({ meeting, username, onUpdate, onClick }) => {
                   onClick={handleEndMeeting}
                   disabled={loading}
                   className="px-3 py-1 text-sm font-medium rounded-full
-                           bg-red-500/10 text-red-400 hover:bg-red-500/20 
+                           bg-red-500/10 text-red-400 hover:bg-red-500/20
                            transition-colors disabled:opacity-50"
                 >
                   {loading ? '...' : 'End'}
@@ -157,7 +170,7 @@ const MeetingCard = memo(({ meeting, username, onUpdate, onClick }) => {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel 
+            <AlertDialogCancel
               disabled={loading}
               className="bg-gray-700 text-gray-100 hover:bg-gray-600"
             >
