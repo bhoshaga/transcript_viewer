@@ -25,7 +25,7 @@
     --ring: 240 5.9% 10%;
     --radius: 0.5rem;
   }
- 
+
   .dark {
     --background: 240 10% 3.9%;
     --foreground: 0 0% 98%;
@@ -55,28 +55,9 @@
   }
   body {
     @apply bg-background text-foreground;
-    margin: 0;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-      'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-      sans-serif;
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
   }
-}
-
-.main-content-grid {
-  @apply grid;
-  grid-template-columns: minmax(0, 1fr) 350px;
-}
-
-code {
-  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
-    monospace;
-}
-
-/* Add custom CSS classes */
-.no-focus-outline:focus {
-  outline: none !important;
-  box-shadow: none !important;
-  ring: 0 !important;
+  .main-content-grid {
+    @apply grid;
+    grid-template-columns: minmax(0, 1fr) 350px;
+  }
 }
