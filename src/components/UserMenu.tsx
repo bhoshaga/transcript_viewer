@@ -3,17 +3,35 @@ import { Button } from "./ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { Separator } from "./ui/separator";
 import { UserCircle, CreditCard, LogOut, Info } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { logoutUser } from "../apis/auth";
 
 export function UserMenu() {
   const [username, setUsername] = useState<string | null>();
+  const navigate = useNavigate();
+  
   useEffect(() => {
     const username = localStorage.getItem("username");
     setUsername(username);
   }, []);
-  const handleLogout = () => {
-    localStorage.removeItem("username");
-    window.location.href = "/login";
+  
+  const handleLogout = async () => {
+    try {
+      if (username) {
+        await logoutUser(username);
+      } else {
+        localStorage.removeItem("username");
+      }
+      // Use React Router navigation instead of window.location
+      navigate("/", { replace: true });
+    } catch (error) {
+      console.error("Logout failed:", error);
+      // Even if API call fails, clear local storage and redirect
+      localStorage.removeItem("username");
+      navigate("/", { replace: true });
+    }
   };
+  
   return (
     <Popover>
       <PopoverTrigger asChild>
