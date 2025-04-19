@@ -1,15 +1,6 @@
 import { AIMessage } from '../lib/AIContext';
 import { OPENAI_API_KEY, CHAT_CONFIG, MAX_CONVERSATION_TOKENS } from '../config';
-// Import tiktoken conditionally
-let encoding_for_model: any;
-try {
-  // Try importing tiktoken
-  const tiktoken = require('tiktoken');
-  encoding_for_model = tiktoken.encoding_for_model;
-} catch (error) {
-  console.warn('Tiktoken import failed, using fallback token counting method', error);
-  encoding_for_model = null;
-}
+import { encoding_for_model } from 'tiktoken';
 
 // Token limits
 const MAX_TRANSCRIPT_TOKENS = 20000; // Maximum number of tokens for transcript data
@@ -20,21 +11,15 @@ const MAX_MESSAGE_TOKENS = 4000; // Maximum tokens for conversation messages
  */
 const countTokens = (text: string, modelName: string = 'gpt-4o'): number => {
   try {
-    // If tiktoken is available, use it
-    if (encoding_for_model) {
-      // Get the encoding for the model - use a specific supported model name
-      const tiktokenModel = modelName === 'gpt-4o' ? 'gpt-4' : modelName;
-      const enc = encoding_for_model(tiktokenModel as any);
-      // Encode the text and return the token count
-      const tokens = enc.encode(text);
-      const count = tokens.length;
-      // Free the encoder to avoid memory leaks
-      enc.free();
-      return count;
-    } else {
-      // Fallback to a rough estimate if tiktoken is not available
-      return Math.ceil(text.length / 4);
-    }
+    // Get the encoding for the model - use a specific supported model name
+    const tiktokenModel = modelName === 'gpt-4o' ? 'gpt-4' : modelName;
+    const enc = encoding_for_model(tiktokenModel as any);
+    // Encode the text and return the token count
+    const tokens = enc.encode(text);
+    const count = tokens.length;
+    // Free the encoder to avoid memory leaks
+    enc.free();
+    return count;
   } catch (error) {
     console.error('Error counting tokens:', error);
     // Fallback to a rough estimate if tiktoken fails
