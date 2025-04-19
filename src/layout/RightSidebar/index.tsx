@@ -1,19 +1,60 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { ScrollArea } from "../../components/ui/scroll-area";
-import { ArrowUpCircle, Loader2, Plus } from "lucide-react";
+import { ArrowUpCircle, Loader2, Plus, X, Minimize } from "lucide-react";
 import { useLocation, useParams } from "react-router-dom";
 import { useAI } from "../../lib/AIContext";
+import { useTranscript } from "../../lib/TranscriptContext";
 import { getContextualSuggestions } from "../../services/aiService";
 import { Message } from "../../types";
 import Markdown from 'markdown-to-jsx';
+import * as ScrollAreaPrimitive from "@radix-ui/react-scroll-area";
+import { cn } from "../../lib/utils";
+
+// Custom CSS to hide scrollbars while preserving functionality
+const hideScrollbarStyles = `
+  /* Hide scrollbar for the right sidebar specifically */
+  .right-sidebar .scrollbar {
+    width: 0 !important;
+    opacity: 0 !important;
+    display: none !important;
+  }
+
+  /* For Webkit browsers (Chrome, Safari) */
+  .right-sidebar *::-webkit-scrollbar {
+    width: 0 !important;
+    display: none !important;
+  }
+
+  /* For Firefox */
+  .right-sidebar * {
+    scrollbar-width: none !important;
+  }
+
+  /* For IE/Edge */
+  .right-sidebar * {
+    -ms-overflow-style: none !important;
+  }
+`;
+
+// Apply the styles once when the component is loaded
+if (typeof document !== 'undefined') {
+  const existingStyle = document.getElementById('right-sidebar-no-scrollbar');
+  if (!existingStyle) {
+    const style = document.createElement('style');
+    style.id = 'right-sidebar-no-scrollbar';
+    style.textContent = hideScrollbarStyles;
+    document.head.appendChild(style);
+  }
+}
 
 // Define more specific context types returned by getCurrentContext
 type TranscriptDetailContext = {
   page: 'transcript-detail';
   meetingId: string;
   placeholder: string;
+  meetingName?: string;
   transcriptData: Message[] | undefined;
 };
 
@@ -29,214 +70,373 @@ type DashboardContext = {
 
 type CurrentContextType = TranscriptDetailContext | TranscriptListContext | DashboardContext;
 
-// Helper to determine the initial context based on URL and potential data
-const getInitialContext = (): CurrentContextType => {
-  const path = window.location.pathname;
-  const meetingIdFromUrl = path.startsWith('/transcript/') ? path.split('/').pop() : undefined;
-  const hasWindowData = window.transcriptData && Array.isArray(window.transcriptData) && window.transcriptData.length > 0;
+// Enable this to see detailed logs during development
+const DEBUG = false;
 
-  if (hasWindowData) {
-    return {
-      page: 'transcript-detail',
-      meetingId: meetingIdFromUrl || 'unknown',
-      placeholder: "Ask about this meeting...",
-      transcriptData: window.transcriptData
-    };
-  } else if (path.includes('/transcript')) {
-    return {
-      page: 'transcript-list',
-      placeholder: "Ask about meetings..."
-    };
-  } else {
-    return {
-      page: 'dashboard',
-      placeholder: "Ask a question...",
-    };
-  }
+// Add a function to get random greeting
+const getRandomGreeting = (day: string, username: string) => {
+  const greetings = [
+    `Happy ${day}, ${username}! Ready to explore your meetings?`,
+    `${day} greetings, ${username}! How can I assist with your meetings today?`,
+    `Welcome back, ${username}! How's your ${day} going?`,
+    `It's a great ${day} to analyze meetings, ${username}!`,
+    `Hello ${username}! How can I help make your ${day} more productive?`,
+    `Hi ${username}! Let's make this ${day} count!`,
+    `${username}, ready to dive into your meetings this ${day}?`,
+    `Glad to see you this ${day}, ${username}!`,
+    `${day}'s the perfect day to get insights, ${username}!`,
+    `${username}, what would you like to know about your meetings this ${day}?`
+  ];
+  
+  // Return a random greeting from the array
+  return greetings[Math.floor(Math.random() * greetings.length)];
 };
 
-const RightSidebar = () => {
+// Add props type for the component
+interface RightSidebarProps {
+  onClose?: () => void;
+}
+
+// Add a ScrollArea component with hidden scrollbar but preserved functionality
+const ScrollAreaHiddenBar = React.forwardRef<
+  React.ElementRef<typeof ScrollAreaPrimitive.Root>,
+  React.ComponentPropsWithoutRef<typeof ScrollAreaPrimitive.Root>
+>(({ className, children, ...props }, ref) => (
+  <ScrollAreaPrimitive.Root
+    ref={ref}
+    className={cn("relative overflow-hidden", className)}
+    {...props}
+  >
+    <ScrollAreaPrimitive.Viewport className="h-full w-full rounded-[inherit]">
+      {children}
+    </ScrollAreaPrimitive.Viewport>
+    <ScrollAreaPrimitive.ScrollAreaScrollbar
+      orientation="vertical"
+      className="invisible-scrollbar flex touch-none select-none transition-colors h-full w-2.5 border-l border-l-transparent p-[1px]"
+    >
+      <ScrollAreaPrimitive.ScrollAreaThumb className="relative flex-1 rounded-full bg-transparent" />
+    </ScrollAreaPrimitive.ScrollAreaScrollbar>
+    <ScrollAreaPrimitive.Corner />
+  </ScrollAreaPrimitive.Root>
+));
+ScrollAreaHiddenBar.displayName = "ScrollAreaHiddenBar";
+
+const RightSidebar = ({ onClose }: RightSidebarProps) => {
   const [input, setInput] = useState("");
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const { messages: aiMessages, addUserMessage, clearMessages, isProcessing, resetChatIfTooLong } = useAI();
   const location = useLocation();
-  const params = useParams();
+  const params = useParams<{ id?: string }>();
   const meetingId = params.id || "";
-  const [transcriptData, setTranscriptData] = useState<Message[]>([]); // Keep local copy if needed, but primary detection uses window
+  const { transcriptData, isDetailView } = useTranscript();
   
-  // *** Use useState to manage the current context ***
-  const [currentContext, setCurrentContext] = useState<CurrentContextType>(getInitialContext());
+  // Track the meeting name for creating better placeholder messages
+  const [currentMeetingName, setCurrentMeetingName] = useState<string | undefined>(undefined);
   
-  // *** Ref to hold the latest context state for use in intervals/callbacks ***
-  const contextRef = useRef(currentContext);
+  // Add this with the other state variables at the top of the component
+  const lastTranscriptLengthRef = useRef<number | null>(null);
+  
+  // Add a ref for the scroll area
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  
+  // Add state for the greeting
+  const [greeting, setGreeting] = useState<string>("");
+  
+  // Set initial greeting when component mounts
   useEffect(() => {
-    console.log(`[RightSidebar contextRef Update] Updating ref with page: ${currentContext.page}`);
-    contextRef.current = currentContext;
-  }, [currentContext]);
+    const today = new Date();
+    const dayName = today.toLocaleDateString(undefined, { weekday: 'long' });
+    const username = localStorage.getItem("username") || "there";
+    setGreeting(getRandomGreeting(dayName, username));
+  }, []);
 
-  // Determine current page context (Define this before updateContext)
-  const getCurrentContext = useCallback((): CurrentContextType => {
-    // Log for debugging
-    const hasWindowData = window.transcriptData && Array.isArray(window.transcriptData) && window.transcriptData.length > 0;
-    console.log(`[RightSidebar getCurrentContext] Called. Path: ${location.pathname}, MeetingID: ${meetingId}, Has window.transcriptData: ${hasWindowData}, Window data length: ${window.transcriptData?.length || 0}`);
+  // Create a placeholder based on view state
+  const createPlaceholder = useCallback(() => {
+    if (isDetailView && currentMeetingName) {
+      return `Ask about "${currentMeetingName}"...`;
+    } else {
+      return "Ask about these meetings...";
+    }
+  }, [isDetailView, currentMeetingName]);
+
+  // Generate placeholder message
+  const placeholder = useMemo(() => {
+    return createPlaceholder();
+  }, [createPlaceholder]);
+
+  // Only log view state changes when DEBUG is true
+  useEffect(() => {
+    // Log only when the view state changes, not every render
+    if (DEBUG) {
+      console.log(`[RightSidebar] View state: ${isDetailView ? 'Detail' : 'List'}, Meeting name: ${currentMeetingName || 'None'}`);
+    }
+  }, [isDetailView, currentMeetingName]);
+  
+  // Get actual meeting name from transcript data if we have it
+  useEffect(() => {
+    if (transcriptData && transcriptData.length > 0) {
+      // Try to find a name in the first message (typically contains meeting info)
+      const firstMessage = transcriptData[0];
+      if (firstMessage && firstMessage.content) {
+        // Look for a meeting name in the content
+        const contentText = firstMessage.content;
+        // Check for common meeting intro patterns like "Welcome to the X meeting"
+        if (contentText.toLowerCase().includes('meeting') || 
+            contentText.toLowerCase().includes('call') || 
+            contentText.toLowerCase().includes('discussion')) {
+          // Very basic extraction - could improve with NLP
+          if (contentText.includes('"') || contentText.includes('"')) {
+            // Look for quoted name
+            const matches = contentText.match(/[""]([^""]+)[""]/) || contentText.match(/["']([^"']+)["']/);
+            if (matches && matches[1]) {
+              setCurrentMeetingName(matches[1]);
+              return;
+            }
+          }
+        }
+        
+        // Fallback to generic name with date if no name found
+        const date = new Date().toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+        setCurrentMeetingName(`Meeting on ${date}`);
+      }
+    }
+  }, [transcriptData]);
+  
+  // Then modify the transcriptData effect to only update AI when needed
+  useEffect(() => {
+    if (DEBUG) console.log(`[RightSidebar] transcriptData changed: ${transcriptData?.length || 0} messages`);
     
-    // Key detection: if we have transcript data, we're in meeting detail view
-    if (hasWindowData) {
-      // We are in a meeting detail view with transcript data
-      const contextResult: TranscriptDetailContext = {
-        page: 'transcript-detail', // Use a more specific page type
-        meetingId: meetingId || 'unknown',
-        placeholder: "Ask about this meeting...",
-        // Ensure we pass an array or undefined, matching the type
-        transcriptData: window.transcriptData ? [...window.transcriptData] : undefined
+    // Only proceed if we have transcript data
+    if (transcriptData && transcriptData.length > 0) {
+      // Check if this is the same length as last time we processed
+      const currentLength = transcriptData.length;
+      if (lastTranscriptLengthRef.current === currentLength) {
+        if (DEBUG) console.log('[RightSidebar] Skipping AI init - same transcript length');
+        return;
+      }
+      
+      // Update reference with current length
+      lastTranscriptLengthRef.current = currentLength;
+      
+      // Get fresh suggestions for transcript detail view
+      const suggestionParams = {
+        page: 'transcript-detail',
+        meetingId
       };
-      console.log("[RightSidebar getCurrentContext] Determined context: transcript-detail", { page: contextResult.page, meetingId: contextResult.meetingId, placeholder: contextResult.placeholder, length: contextResult.transcriptData?.length });
-      return contextResult;
+      
+      if (DEBUG) console.log('[RightSidebar] Updating suggestions for transcript data change');
+      const newDetailSuggestions = getContextualSuggestions(suggestionParams);
+      setSuggestions(newDetailSuggestions);
+      
+      // Initialize AI context with transcript data
+      const transcriptContext = {
+        page: 'transcript-detail',
+        meetingId,
+        transcriptData: [...transcriptData],
+        meetingName: currentMeetingName,
+        placeholder: createPlaceholder()
+      };
+      
+      if (DEBUG) {
+        console.log('[RightSidebar] Initializing AI with transcript data (length changed)');
+      }
+      // Pass special __INIT__ command to update context without adding a message
+      addUserMessage("__INIT__", transcriptContext);
+    }
+  }, [transcriptData, meetingId, addUserMessage, currentMeetingName, createPlaceholder]);
+
+  // Initialize context on mount based on URL
+  useEffect(() => {
+    // On first mount, determine the context based on location
+    const isOnMeetingDetailPage = location.pathname.startsWith('/t/');
+    
+    if (DEBUG) console.log(`[RightSidebar] Initial context: IsDetail=${isOnMeetingDetailPage}, MeetingID=${meetingId}`);
+    
+    // Set appropriate suggestions based on path
+    if (isOnMeetingDetailPage && meetingId) {
+      const suggestionParams = {
+        page: 'transcript-detail',
+        meetingId
+      };
+      const detailSuggestions = getContextualSuggestions(suggestionParams);
+      setSuggestions(detailSuggestions);
+    } else {
+      const listSuggestionParams = {
+        page: 'transcript-list'
+      };
+      const listSuggestions = getContextualSuggestions(listSuggestionParams);
+      setSuggestions(listSuggestions);
+    }
+  }, [location.pathname, meetingId]);
+
+  // Add this after the existing initializing effect that runs on mount
+  // This effect specifically handles URL path changes
+  useEffect(() => {
+    // When the user navigates to a meeting detail page
+    if (location.pathname.startsWith('/t/') && meetingId) {
+      if (DEBUG) console.log(`[RightSidebar] URL changed to meeting detail: ${meetingId}`);
+      
+      // Immediately update suggestions for the transcript detail view
+      const suggestionParams = {
+        page: 'transcript-detail',
+        meetingId
+      };
+      
+      const detailSuggestions = getContextualSuggestions(suggestionParams);
+      setSuggestions(detailSuggestions);
+
+      // Set the context even before transcript data arrives
+      setCurrentContext({
+        page: 'transcript-detail',
+        meetingId,
+        placeholder: createPlaceholder(),
+        transcriptData: undefined
+      });
+    } else if (location.pathname === '/') {
+      // When navigating to meeting list
+      if (DEBUG) console.log('[RightSidebar] URL changed to meeting list view');
+      
+      const listSuggestionParams = {
+        page: 'transcript-list'
+      };
+      
+      const listSuggestions = getContextualSuggestions(listSuggestionParams);
+      setSuggestions(listSuggestions);
+
+      // Set the context for meeting list view
+      setCurrentContext({
+        page: 'transcript-list',
+        placeholder: createPlaceholder()
+      });
+    }
+  }, [location.pathname, meetingId, createPlaceholder]);
+
+  // Get the current page context based on URL and state
+  const getCurrentContext = useCallback((): CurrentContextType => {
+    // Check if we're in detail view with a meeting ID in the URL
+    const isOnMeetingDetailPage = location.pathname.startsWith('/t/');
+    // Check if we have actual transcript data available
+    const hasTranscriptData = !!transcriptData && transcriptData.length > 0;
+    
+    // If we're on a meeting detail page (/t/:id)
+    if (isOnMeetingDetailPage) {
+      if (hasTranscriptData) {
+        // We have both the URL and data - full context is available
+        const contextResult: TranscriptDetailContext = {
+          page: 'transcript-detail',
+          meetingId,
+          placeholder: createPlaceholder(),
+          meetingName: currentMeetingName,
+          transcriptData: [...transcriptData]
+        };
+        
+        if (DEBUG) console.log("[RightSidebar] Complete transcript context ready", { 
+          meetingId: contextResult.meetingId, 
+          dataLength: contextResult.transcriptData?.length 
+        });
+        
+        return contextResult;
+      } else {
+        // We're on a detail page but transcript data isn't loaded yet
+        if (DEBUG) console.log("[RightSidebar] On transcript detail page but no data yet");
+        return {
+          page: 'transcript-detail',
+          meetingId,
+          placeholder: createPlaceholder(),
+          transcriptData: undefined
+        };
+      }
     }
     
-    // Check if we're on the transcript page path but with no data (meeting list)
-    if (location.pathname.includes('/transcript')) {
+    // Check if we're on the meeting list page (root URL /)
+    if (location.pathname === '/') {
       const contextResult: TranscriptListContext = {
-        page: 'transcript-list', // Distinguish the list view
-        placeholder: "Ask about meetings..."
+        page: 'transcript-list',
+        placeholder: createPlaceholder()
       };
-      console.log("[RightSidebar getCurrentContext] Determined context: transcript-list", contextResult);
+      
+      if (DEBUG) console.log("[RightSidebar] Context: transcript-list");
       return contextResult;
     }
     
     // Default for other pages
     const contextResult: DashboardContext = {
       page: 'dashboard',
-      placeholder: "Ask a question...",
+      placeholder: createPlaceholder(),
     };
-    console.log("[RightSidebar getCurrentContext] Determined context: dashboard", contextResult);
+    
+    if (DEBUG) console.log("[RightSidebar] Context: dashboard");
     return contextResult;
-  }, [location.pathname, meetingId]); // Dependencies are correct
+  }, [location.pathname, meetingId, transcriptData, createPlaceholder, currentMeetingName]);
 
-  // Function to recalculate and update the context state
-  const updateContext = useCallback(() => {
-    const newContext = getCurrentContext(); // Use the existing logic (now defined above)
-    const latestContextState = contextRef.current; // Read latest state via ref
+  // State to track the current context
+  const [currentContext, setCurrentContext] = useState<CurrentContextType>(getCurrentContext());
+  
+  // Reference to hold latest context state for callbacks
+  const contextRef = useRef(currentContext);
+  useEffect(() => {
+    contextRef.current = currentContext;
+  }, [currentContext]);
+
+  // Force context update whenever transcriptData changes
+  useEffect(() => {
+    const newContext = getCurrentContext();
+    if (DEBUG) console.log(`[RightSidebar] Checking context update, data length: ${transcriptData?.length || 0}`);
+    setCurrentContext(newContext);
+  }, [transcriptData, getCurrentContext]);
+  
+  // Update context when location changes
+  useEffect(() => {
+    const newContext = getCurrentContext();
+    const latestContextState = contextRef.current;
     
-    // Determine if transcript data actually changed (relevant for detail view)
-    let transcriptDataChanged = false;
-    if (newContext.page === 'transcript-detail' && latestContextState.page === 'transcript-detail') {
-        // Compare lengths or deep compare if necessary, for now length is often sufficient
-        transcriptDataChanged = newContext.transcriptData?.length !== latestContextState.transcriptData?.length;
+    // Check for actual changes to avoid unnecessary updates
+    const transcriptDataChanged = 
+      (newContext.page === 'transcript-detail' && latestContextState.page === 'transcript-detail') &&
+      ((newContext as TranscriptDetailContext).transcriptData?.length || 0) !== 
+      ((latestContextState as TranscriptDetailContext).transcriptData?.length || 0);
+    
+    const pageChanged = latestContextState.page !== newContext.page;
+    const meetingIdChanged = 
+      (newContext.page === 'transcript-detail' && latestContextState.page === 'transcript-detail') &&
+      (newContext as TranscriptDetailContext).meetingId !== (latestContextState as TranscriptDetailContext).meetingId;
+    
+    if (pageChanged || transcriptDataChanged || meetingIdChanged) {
+      if (DEBUG) console.log(`[RightSidebar] Context changing: ${latestContextState.page} → ${newContext.page}`);
+      setCurrentContext(newContext);
     }
+  }, [location.pathname, getCurrentContext]);
 
-    // Only update state if the page type changed OR if transcript data changed within detail view
-    if (latestContextState.page !== newContext.page || transcriptDataChanged)
-    {
-        console.log(`[RightSidebar updateContext] Context changing from ${latestContextState.page} to ${newContext.page}. Data changed: ${transcriptDataChanged}`);
+  // Update context when meeting name changes
+  useEffect(() => {
+    if (currentMeetingName) {
+      // Only update if we're in detail view and already have a context
+      if (isDetailView && currentContext.page === 'transcript-detail') {
+        const newContext = getCurrentContext();
         setCurrentContext(newContext);
-    } else {
-        console.log(`[RightSidebar updateContext] No context change needed (already ${newContext.page}, data changed: ${transcriptDataChanged}).`);
+      }
     }
-  }, [getCurrentContext]); // Now depends only on the stable getCurrentContext callback
+  }, [currentMeetingName, isDetailView, getCurrentContext, currentContext]);
 
-  // Get transcript data and update context when available
+  // Auto-scroll to bottom when messages update or when isProcessing changes
   useEffect(() => {
-    const getTranscriptDataAndUpdateContext = () => {
-      // Function now determines *if* an update is needed based on window data
-      const hasWindowDataNow = window.transcriptData && Array.isArray(window.transcriptData) && window.transcriptData.length > 0;
-      const latestContextState = contextRef.current; // Read latest state via ref
-
-      console.log(`[getTranscriptDataAndUpdateContext] Checking. HasWindowData: ${hasWindowDataNow}, CurrentContextPage: ${latestContextState.page}`);
-
-      if (hasWindowDataNow && latestContextState.page !== 'transcript-detail') {
-        console.log("-> Data found, context needs update to detail.");
-        // Ensure we pass a valid array to setTranscriptData
-        setTranscriptData(window.transcriptData ? [...window.transcriptData] : []); 
-        updateContext(); // This recalculates based on latest window data & sets state
-        return true;
-      } else if (!hasWindowDataNow && latestContextState.page === 'transcript-detail') {
-        console.log("-> No data found, context needs update away from detail.");
-        setTranscriptData([]); // Clear local state
-        updateContext(); // This recalculates & sets state
-        return false;
-      } else {
-        console.log(`-> No context update needed. HasData: ${hasWindowDataNow}, CurrentPage: ${latestContextState.page}`);
-        // Update local transcript state if window has data but context is already correct
-        // Ensure type safety when comparing IDs
-        if (hasWindowDataNow && window.transcriptData && (!transcriptData || transcriptData.length === 0 || transcriptData[0]?.id !== window.transcriptData[0]?.id)) {
-           setTranscriptData([...window.transcriptData]); // Pass a new array copy
-        }
-        return hasWindowDataNow;
-      }
-    };
-
-    // Log the current path for debugging
-    console.log(`[RightSidebar Effect Hook] Running. Path: ${location.pathname}, MeetingID: ${meetingId}, Initial context page: ${contextRef.current.page}`); // Use ref for initial log too
-    
-    // Initial check
-    getTranscriptDataAndUpdateContext();
-      
-    // Set up a listener for the custom event from Transcript component
-    const handleTranscriptDataReady = (event: CustomEvent) => {
-      console.log("*********** [RightSidebar] Received transcriptDataReady event! ***********", event.detail);
-      console.log("[RightSidebar] EVENT: Attempting context update.");
-      getTranscriptDataAndUpdateContext();
-    };
-    
-    // Add the event listener for transcript data changes
-    console.log("[RightSidebar Effect Hook] Adding transcriptDataReady event listener.");
-    window.addEventListener('transcriptDataReady', handleTranscriptDataReady as EventListener);
-    
-    // Set up polling check
-    console.log("[RightSidebar Effect Hook] Starting polling check for window.transcriptData.");
-    const checkForTranscriptInterval = setInterval(() => {
-      const hasWindowDataNow = window.transcriptData && Array.isArray(window.transcriptData) && window.transcriptData.length > 0;
-      
-      // *** Read the LATEST context state using the ref inside the interval ***
-      const actualCurrentPage = contextRef.current.page; 
-      
-      const expectedPageType = hasWindowDataNow ? 'transcript-detail' : 
-                              (location.pathname.includes('/transcript') ? 'transcript-list' : 'dashboard');
-
-      // Check if the *actual* latest context state matches the expected state
-      if (actualCurrentPage !== expectedPageType) {
-          console.log(`*********** [RightSidebar Polling Check] Detected MISMATCH! Expected: ${expectedPageType}, Actual: ${actualCurrentPage}. HasData: ${hasWindowDataNow} ***********`);
-          // Call the update function which will internally call getCurrentContext and setCurrentContext
-          getTranscriptDataAndUpdateContext(); 
-      } else {
-          // Optional: Reduce logging frequency when stable
-          // console.log(`[Polling Check] State stable. Expected: ${expectedPageType}, Actual: ${actualCurrentPage}`);
-      }
-    }, 2000); // Check every 2 seconds
-    
-    // Clean up all listeners and intervals when component unmounts
-    return () => {
-      console.log("[RightSidebar Effect Hook] Cleaning up listeners and intervals.");
-      clearInterval(checkForTranscriptInterval);
-      window.removeEventListener('transcriptDataReady', handleTranscriptDataReady as EventListener);
-    };
-  }, [location.pathname, meetingId, updateContext]); // Dependencies seem stable now
-
-  // Load contextual suggestions when page changes (depends on the context state)
-  useEffect(() => {
-    const suggestionsContext = {
-      page: currentContext.page,
-      meetingId: currentContext.page === 'transcript-detail' ? currentContext.meetingId : undefined,
-    };
-    console.log("[RightSidebar Suggestions Effect] Updating suggestions for page:", currentContext.page);
-    const newSuggestions = getContextualSuggestions(suggestionsContext);
-    setSuggestions(newSuggestions);
-    // Use a dependency that changes reliably when the view type changes
-  }, [currentContext.page, currentContext.page === 'transcript-detail' ? currentContext.meetingId : null]); 
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [aiMessages, isProcessing]);
 
   const handleSendMessage = () => {
     if (!input.trim()) return;
     
-    // Get the latest context state
-    const contextToSend = currentContext; 
+    // Double-check context just before sending
+    const contextToSend = getCurrentContext();
     
-    // For debugging - log the context being sent
-    console.log('[RightSidebar handleSendMessage] Context before sending:', {
+    if (DEBUG) console.log('[RightSidebar] Sending message with context:', {
       page: contextToSend.page,
-      meetingId: contextToSend.page === 'transcript-detail' ? contextToSend.meetingId : undefined,
-      hasTranscript: contextToSend.page === 'transcript-detail' && !!contextToSend.transcriptData,
-      transcriptLength: contextToSend.page === 'transcript-detail' ? contextToSend.transcriptData?.length || 0 : 0
+      meetingId: contextToSend.page === 'transcript-detail' ? (contextToSend as TranscriptDetailContext).meetingId : undefined,
+      hasTranscript: contextToSend.page === 'transcript-detail' && !!(contextToSend as TranscriptDetailContext).transcriptData,
+      transcriptLength: contextToSend.page === 'transcript-detail' ? (contextToSend as TranscriptDetailContext).transcriptData?.length || 0 : 0
     });
     
     // Reset the chat if it's too long
@@ -259,8 +459,8 @@ const RightSidebar = () => {
   };
 
   const handleSuggestionClick = (suggestion: string) => {
-    // Get the latest context state
-    const contextToSend = currentContext;
+    // Double-check context just before sending
+    const contextToSend = getCurrentContext();
     addUserMessage(suggestion, contextToSend);
   };
 
@@ -273,24 +473,38 @@ const RightSidebar = () => {
 
   return (
     <div className="h-full flex flex-col bg-card">
-      {/* Header with New Chat button */}
-      <div className="p-3 border-b border-border flex items-center justify-between">
+      {/* Header with New Chat and Close buttons */}
+      <div className="py-1 px-2 border-b border-border flex items-center justify-between">
         <Button 
           variant="ghost" 
-          className="text-xs flex items-center px-2 py-1 h-7 text-muted-foreground hover:text-foreground"
+          className="text-xs flex items-center px-2 py-1 h-6 text-muted-foreground hover:text-foreground"
           onClick={handleNewChat}
         >
-          <Plus className="h-3.5 w-3.5 mr-1" />
-          New Chat
+          <Plus className="h-3 w-3 mr-1" />
+          New
         </Button>
-        {transcriptData.length > 0 && (
-          <span className="text-xs text-muted-foreground">
-            {transcriptData.length} messages available
-          </span>
-        )}
+        
+        {/* Centered message count */}
+        <div className="flex-1 text-center">
+          {currentContext.page === 'transcript-detail' && (currentContext as TranscriptDetailContext).transcriptData && (
+            <span className="text-xs text-muted-foreground">
+              {(currentContext as TranscriptDetailContext).transcriptData?.length || 0} messages
+            </span>
+          )}
+        </div>
+        
+        {/* Close button */}
+        <Button
+          variant="ghost"
+          className="text-xs flex items-center px-2 py-1 h-6 text-muted-foreground hover:text-foreground"
+          onClick={onClose}
+        >
+          <Minimize className="h-3 w-3" />
+        </Button>
       </div>
       
-      <ScrollArea className="flex-1 px-3 py-4">
+      {/* Main chat area */}
+      <ScrollArea className="flex-1 px-2 py-3 no-scrollbar" ref={scrollAreaRef}>
         <div className="space-y-6">
           {aiMessages.length > 0 ? (
             aiMessages.map((message) => (
@@ -454,14 +668,16 @@ const RightSidebar = () => {
             ))
           ) : (
             <div className="text-center py-8 text-muted-foreground">
-              Ask me questions about your meetings.
+              {greeting}
             </div>
           )}
           
           {/* Show suggestions if there are no messages or only the welcome message */}
           {aiMessages.length <= 1 && suggestions.length > 0 && (
             <div className="mt-6 space-y-2">
-              <p className="text-xs text-muted-foreground mb-2">You can ask:</p>
+              <p className="text-xs text-muted-foreground mb-2">
+                {currentContext.page === 'transcript-detail' ? "Ask about this meeting:" : "You can ask:"}
+              </p>
               {suggestions.map((suggestion, index) => (
                 <Button
                   key={index}
@@ -474,16 +690,19 @@ const RightSidebar = () => {
               ))}
             </div>
           )}
+          
+          {/* Invisible element to scroll to */}
+          <div ref={messagesEndRef} />
         </div>
       </ScrollArea>
       
-      <div className="p-3 border-t border-border">
+      <div className="p-2 border-t border-border">
         <div className="flex space-x-2">
           <Input
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyPress}
-            placeholder={currentContext.placeholder}
+            placeholder={createPlaceholder()}
             className="flex-1 text-sm h-9 bg-background"
             disabled={isProcessing}
           />
@@ -505,86 +724,4 @@ const RightSidebar = () => {
   );
 };
 
-// Add TypeScript interface extension for the Window object
-declare global {
-  interface Window {
-    transcriptData?: any[];
-  }
-}
-
 export default RightSidebar; 
-
-// Add minimal styling for markdown-to-jsx
-const style = document.createElement('style');
-style.textContent = `
-  /* Reduce list indentation */
-  .markdown-simple ol,
-  .markdown-simple ul,
-  .markdown-list-ordered,
-  .markdown-list-unordered {
-    padding-left: 0.3rem;
-    margin: 0.5rem 0;
-    list-style-position: outside;
-  }
-  
-  /* Ensure ordered lists show numbers */
-  .markdown-simple ol,
-  .markdown-list-ordered {
-    list-style-type: decimal !important;
-    margin-left: 0.5rem;
-  }
-  
-  /* Ensure unordered lists show bullets */
-  .markdown-simple ul,
-  .markdown-list-unordered {
-    list-style-type: disc !important;
-    margin-left: 0.5rem;
-  }
-  
-  /* Make ordered list markers right-aligned */
-  .markdown-simple ol > li::marker,
-  .markdown-list-ordered > li::marker {
-    font-weight: 600;
-    content: counter(list-item) ".";
-    padding-right: 0;
-    margin-right: 0;
-  }
-  
-  /* Set baseline spacing for paragraphs */
-  .markdown-simple p {
-    margin: 0.5rem 0;
-  }
-  
-  /* Compact list items */
-  .markdown-simple li,
-  .markdown-list-item {
-    margin-bottom: 0.25rem;
-    padding-left: 0.2rem;
-    margin-left: 0;
-    text-indent: 0;
-  }
-  
-  /* Make list items more compact when they contain paragraphs */
-  .markdown-simple li p,
-  .markdown-list-item p {
-    margin-top: 0;
-    margin-bottom: 0.25rem;
-    display: inline;
-  }
-  
-  /* Ensure headings have proper spacing */
-  .markdown-simple h1,
-  .markdown-simple h2,
-  .markdown-simple h3 {
-    margin-top: 1rem;
-    margin-bottom: 0.5rem;
-    font-weight: 600;
-  }
-  
-  /* Make sure table is scrollable */
-  .markdown-simple table {
-    overflow-x: auto;
-    display: block;
-  }
-`;
-document.head.appendChild(style); 

@@ -6,6 +6,8 @@ import "./App.css";
 import MainLayout from "./layout/MainLayout";
 import { ToastProvider } from "./components/ui/toast";
 import { BreadcrumbProvider } from "./lib/BreadcrumbContext";
+import { AIProvider } from "./lib/AIContext";
+import { TranscriptProvider } from "./lib/TranscriptContext";
 
 // Helper to check if user is logged in
 const isLoggedIn = () => {
@@ -46,37 +48,65 @@ const AuthWrapper = ({ children }: { children: JSX.Element }) => {
     return null;
   }
   
-  // For login routes, redirect to /transcript if authenticated
-  if (isAuthenticated && (location.pathname === '/login' || location.pathname === '/')) {
-    return <Navigate to="/transcript" replace />;
+  // For login routes, redirect to home if authenticated
+  if (isAuthenticated && (location.pathname === '/login')) {
+    return <Navigate to="/" replace />;
   }
   
   return children;
 };
 
-// Component to wrap the MainLayout with BreadcrumbProvider
-const LayoutWithBreadcrumbs = () => (
+// Component to wrap the MainLayout with providers
+const LayoutWithProviders = () => (
   <BreadcrumbProvider>
-    <MainLayout />
+    <AIProvider>
+      <TranscriptProvider>
+        <MainLayout />
+      </TranscriptProvider>
+    </AIProvider>
   </BreadcrumbProvider>
 );
+
+// Implement logout handler
+const LogoutHandler = () => {
+  useEffect(() => {
+    // Clear authentication
+    localStorage.removeItem("username");
+    // Redirect will be handled by AuthWrapper
+  }, []);
+  
+  return <Navigate to="/login" replace />;
+};
 
 export default function App() {
   const Router = () =>
     useRoutes([
       {
-        path: "/",
-        element: <Navigate to={isLoggedIn() ? "/transcript" : "/login"} replace />,
-      },
-      {
         path: "/login",
         element: <AuthWrapper><Login /></AuthWrapper>,
       },
       {
-        element: <LayoutWithBreadcrumbs />,
+        path: "/logout",
+        element: <LogoutHandler />,
+      },
+      // Redirect old transcript path to root
+      {
+        path: "/transcript",
+        element: <Navigate to="/" replace />
+      },
+      {
+        element: <LayoutWithProviders />,
         children: [
           {
-            path: "/transcript",
+            path: "/",
+            element: (
+              <RequireAuth>
+                <Transcript />
+              </RequireAuth>
+            ),
+          },
+          {
+            path: "/t/:id",
             element: (
               <RequireAuth>
                 <Transcript />
@@ -84,6 +114,11 @@ export default function App() {
             ),
           },
         ],
+      },
+      // Fallback - redirect to root
+      {
+        path: "*",
+        element: <Navigate to={isLoggedIn() ? "/" : "/login"} replace />,
       },
     ]);
 
@@ -95,3 +130,4 @@ export default function App() {
     </ToastProvider>
   );
 }
+

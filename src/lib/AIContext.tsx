@@ -1,5 +1,9 @@
-import React, { createContext, useContext, useState, ReactNode, useCallback } from 'react';
+import React, { createContext, useContext, useState, ReactNode, useCallback, useMemo, useEffect, useRef } from 'react';
 import { processUserMessage, isConversationTooLong } from '../services/aiService';
+import { useLocation } from 'react-router-dom';
+
+// Enable this to see detailed logs during development
+const DEBUG = false;
 
 // Define message type
 export interface AIMessage {
@@ -32,16 +36,39 @@ export const useAI = () => useContext(AIContext);
 
 // Provider component
 export const AIProvider = ({ children }: { children: ReactNode }) => {
-  const [messages, setMessages] = useState<AIMessage[]>([
-    {
-      id: '1',
-      content: "Hello! I'm your AI assistant. How can I help you understand your meetings today?",
-      isUser: false,
-      timestamp: new Date(),
-    },
-  ]);
+  const [messages, setMessages] = useState<AIMessage[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [currentResponseId, setCurrentResponseId] = useState<string | null>(null);
+  const location = useLocation();
+  const [lastContext, setLastContext] = useState<any>(null);
+  
+  // Track the last context hash to avoid redundant updates
+  const lastContextHashRef = useRef<string | null>(null);
+
+  // Compute a cache key/hash for context to efficiently check if it's changed
+  const computeContextHash = (context: any): string => {
+    if (!context) return 'null';
+    // Create a simplified context representation focusing on key fields only
+    const simplified = {
+      page: context.page,
+      meetingId: context.meetingId,
+      dataLength: context.transcriptData?.length || 0
+    };
+    return JSON.stringify(simplified);
+  };
+  
+  // Initialize welcome message based on location
+  useEffect(() => {
+    const isOnDetailPage = location.pathname.startsWith('/t/');
+    const isOnListPage = location.pathname === '/';
+    
+    if (DEBUG) console.log(`[AIContext] Setting up initial state for path: ${location.pathname}`);
+    
+    // Initialize with empty messages array instead of welcome message
+    if (messages.length === 0) {
+      setMessages([]);
+    }
+  }, [location.pathname, messages.length]);
 
   // Reset chat if conversation is too long
   const resetChatIfTooLong = useCallback((): boolean => {
@@ -63,12 +90,28 @@ export const AIProvider = ({ children }: { children: ReactNode }) => {
   const addUserMessage = useCallback((content: string, context?: any) => {
     // Special case for initialization - just set up context without adding a message
     if (content === "__INIT__") {
-      console.log("[AIContext] Initializing with context:", {
-        page: context?.page,
-        meetingId: context?.meetingId,
-        hasTranscriptData: !!context?.transcriptData,
-        transcriptLength: context?.transcriptData?.length || 0
-      });
+      // Check if the context has actually changed
+      const contextHash = computeContextHash(context);
+      if (contextHash === lastContextHashRef.current) {
+        if (DEBUG) console.log("[AIContext] Skipping init - context unchanged");
+        return;
+      }
+      
+      lastContextHashRef.current = contextHash;
+      
+      if (DEBUG) {
+        console.log("[AIContext] Initializing with context:", {
+          page: context?.page,
+          meetingId: context?.meetingId,
+          hasTranscriptData: !!context?.transcriptData,
+          transcriptLength: context?.transcriptData?.length || 0
+        });
+      } else {
+        console.log(`[AIContext] Context updated (${context?.page}, ${context?.transcriptData?.length || 0} msgs)`);
+      }
+      
+      // Store the context for future reference
+      setLastContext(context);
       return;
     }
     
@@ -101,24 +144,28 @@ export const AIProvider = ({ children }: { children: ReactNode }) => {
       }
     ]);
 
-    // Get latest transcript data directly from window if available
-    const latestContext = {
-      ...context,
-      // Make sure to include latest transcript data if not already in context
-      transcriptData: context?.transcriptData || window.transcriptData
-    };
+    // Check for any significant context changes
+    const contextHash = computeContextHash(context);
+    const hasChanged = contextHash !== lastContextHashRef.current;
+    
+    if (hasChanged) {
+      if (DEBUG) console.log('[AIContext] Context has changed since last message');
+      lastContextHashRef.current = contextHash;
+      setLastContext(context);
+    }
 
-    console.log('[AIContext] Final context being sent to AI:', {
-      hasContext: !!latestContext,
-      hasTranscriptData: !!latestContext?.transcriptData,
-      transcriptLength: latestContext?.transcriptData?.length || 0,
-      page: latestContext?.page,
-      contextKeys: latestContext ? Object.keys(latestContext) : [],
-      windowTranscriptAvailable: !!window.transcriptData,
-      windowTranscriptLength: window.transcriptData?.length || 0,
-      windowObject: !!window,
-      pathname: window.location.pathname
-    });
+    // Log the context being sent (only in debug mode)
+    if (DEBUG) {
+      console.log('[AIContext] Final context being sent to AI:', {
+        hasContext: !!context,
+        hasTranscriptData: !!context?.transcriptData,
+        transcriptLength: context?.transcriptData?.length || 0,
+        page: context?.page,
+        contextKeys: context ? Object.keys(context) : [],
+        pathname: location.pathname,
+        contextChanged: hasChanged
+      });
+    }
 
     // Process the message with streaming
     processUserMessage(
@@ -144,48 +191,30 @@ export const AIProvider = ({ children }: { children: ReactNode }) => {
         setIsProcessing(false);
         setCurrentResponseId(null);
       },
-      latestContext
+      context
     );
-  }, [messages, resetChatIfTooLong]);
+  }, [messages, resetChatIfTooLong, location.pathname, lastContext]);
 
   // Clear all messages except the initial greeting
   const clearMessages = useCallback(() => {
-    console.log("[AIContext] Clearing messages and re-initializing context.");
-    setMessages([
-      {
-        id: Date.now().toString(),
-        content: "Hello! I'm your AI assistant. How can I help you understand your meetings today?",
-        isUser: false,
-        timestamp: new Date(),
-      },
-    ]);
+    if (DEBUG) console.log("[AIContext] Clearing messages");
+    
+    // Initialize with empty messages array
+    setMessages([]);
+    
+    // Also clear last context when starting a new chat
+    setLastContext(null);
+    lastContextHashRef.current = null;
+  }, []);
 
-    // Re-initialize with current transcript data if available using the __INIT__ mechanism
-    if (window.transcriptData && Array.isArray(window.transcriptData) && window.transcriptData.length > 0) {
-      console.log("[AIContext] Re-initializing with transcript data after clearing messages.");
-      // Use the addUserMessage with __INIT__ to update context consistently
-      addUserMessage("__INIT__", {
-        page: 'transcript-detail', // Assume detail if transcript data exists
-        meetingId: window.location.pathname.split('/').pop() || 'unknown',
-        transcriptData: window.transcriptData
-      });
-    } else {
-      // If no transcript data, initialize with appropriate context (e.g., list or dashboard)
-      const currentPage = window.location.pathname.includes('/transcript') ? 'transcript-list' : 'dashboard';
-      console.log(`[AIContext] Initializing with ${currentPage} context after clearing (no transcript data).`);
-      addUserMessage("__INIT__", {
-        page: currentPage
-      });
-    }
-  }, [addUserMessage]);
-
-  const value = {
+  // Use useMemo to create the context value to prevent unnecessary rerenders
+  const value = useMemo(() => ({
     messages,
     addUserMessage,
     clearMessages,
     isProcessing,
     resetChatIfTooLong,
-  };
+  }), [messages, addUserMessage, clearMessages, isProcessing, resetChatIfTooLong]);
 
   return <AIContext.Provider value={value}>{children}</AIContext.Provider>;
 }; 

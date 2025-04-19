@@ -37,14 +37,15 @@ import { currentSpace, speakerColors } from "../data/meetings";
 import { Meeting, Message, ActionItem } from "../types";
 import { MeetingListView } from "../components/MeetingListView";
 import { MessageList } from "../components/MessageList";
-import { ActionItems, SpeakerStats } from "../components/Sidebar";
+import { ActionItems, SpeakerStats } from "../components/MeetingPanels";
 import { UserMenu } from "../components/UserMenu";
 import { fetchMeetings, joinMeeting, endMeeting, deleteMeeting } from "../apis/meeting";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation, useParams } from "react-router-dom";
 import { formatTimestamp } from "../lib/utils";
 import { toggleMessageStar, createActionItem } from "../apis/message";
 import { toast } from '../components/ui/toast';
 import { useBreadcrumb } from "../lib/BreadcrumbContext";
+import { useTranscript } from '../lib/TranscriptContext';
 
 // Define WebSocket message types
 interface WebSocketMessage {
@@ -86,6 +87,13 @@ const Transcript = () => {
   const [error, setError] = useState("");
 
   const [messages, setMessages] = useState<Message[]>([]);
+  const { 
+    setTranscriptData, 
+    navigateToMeetingDetail, 
+    navigateToMeetingList, 
+    selectedMeetingId,
+    setMeetingName
+  } = useTranscript();
 
   const [actionItems, setActionItems] = useState<ActionItem[]>([]);
 
@@ -100,6 +108,9 @@ const Transcript = () => {
   const [currentSearchIndex, setCurrentSearchIndex] = useState(0);
 
   const navigate = useNavigate();
+  const location = useLocation();
+  const params = useParams<{ id?: string }>();
+  const meetingIdFromUrl = params.id;
   const { registerNavigateHandler } = useBreadcrumb();
 
   useEffect(() => {
@@ -115,11 +126,41 @@ const Transcript = () => {
         const username = localStorage.getItem("username");
         setUser_name(username);
         if (!username) {
-          window.location.href = "/login";
+          navigate("/login", { replace: true });
           return;
         }
         const fetchedMeetings = await fetchMeetings(username);
-        setMeetings(fetchedMeetings);
+        
+        // Compare with existing meetings to avoid unnecessary re-renders
+        if (JSON.stringify(fetchedMeetings) !== JSON.stringify(meetings)) {
+          console.log('[Transcript] Updating meetings data (changes detected)');
+          setMeetings(fetchedMeetings);
+          
+          // If we have a selected meeting, update its data if needed
+          if (selectedMeeting) {
+            const updatedMeeting = fetchedMeetings.find(m => m.id === selectedMeeting.id);
+            if (updatedMeeting && JSON.stringify(updatedMeeting) !== JSON.stringify(selectedMeeting)) {
+              console.log('[Transcript] Updating selected meeting data');
+              setSelectedMeeting(updatedMeeting);
+            }
+          }
+        } else {
+          console.log('[Transcript] Skipping update - no changes in meetings data');
+        }
+        
+        // If we have a meetingId in the URL, load that meeting
+        if (meetingIdFromUrl && !selectedMeeting) {
+          console.log(`[Transcript] URL has meeting ID: ${meetingIdFromUrl}, loading meeting data`);
+          const matchingMeeting = fetchedMeetings.find(m => m.id === meetingIdFromUrl);
+          if (matchingMeeting) {
+            console.log(`[Transcript] Found matching meeting for ID ${meetingIdFromUrl}:`, matchingMeeting.name);
+            handleMeetingSelect(matchingMeeting);
+          } else {
+            console.error(`[Transcript] Meeting with ID ${meetingIdFromUrl} not found`);
+            // Redirect to meeting list if meeting not found
+            navigateToMeetingList();
+          }
+        }
       } catch (error) {
         console.error("Error fetching meetings:", error);
         setError("Failed to fetch meetings. Please try again.");
@@ -132,34 +173,47 @@ const Transcript = () => {
     // Initial fetch - pass true to indicate it's the initial load
     fetchMeetingsData(true);
     
-    // Set up polling interval for refreshes
-    const pollingInterval = setInterval(() => fetchMeetingsData(false), 10000);
+    // Set up polling interval for refreshes - but only for active meetings
+    let pollingInterval: NodeJS.Timeout | null = null;
+    
+    if (selectedMeeting?.is_active) {
+      console.log('[Transcript] Setting up polling for active meeting');
+      pollingInterval = setInterval(() => fetchMeetingsData(false), 10000);
+    }
     
     // Clean up interval on component unmount
-    return () => clearInterval(pollingInterval);
-  }, []);
+    return () => {
+      if (pollingInterval) {
+        console.log('[Transcript] Clearing polling interval');
+        clearInterval(pollingInterval);
+      }
+    };
+  }, [meetingIdFromUrl, navigateToMeetingList, navigate, selectedMeeting?.is_active, selectedMeeting?.id]);
 
   const handleMeetingSelect = async (meeting: Meeting) => {
-    // Set the selected meeting first to ensure UI updates immediately
-    setSelectedMeeting(meeting);
+    // If not already on the meeting detail URL, navigate to it first
+    if (!meetingIdFromUrl || meetingIdFromUrl !== meeting.id) {
+      console.log(`[Transcript] Navigating to meeting detail: /t/${meeting.id}`);
+      // Set selected meeting first to avoid flash of empty content
+      setSelectedMeeting(meeting);
+      // Set the meeting name in the context
+      setMeetingName(meeting.name);
+      navigateToMeetingDetail(meeting.id);
+      return; // The navigation will trigger a re-render, which will load the meeting data
+    }
     
-    console.log("Selected meeting:", meeting.name);
+    // Already on the correct URL, load data immediately
+    console.log(`[Transcript] Loading meeting data for: ${meeting.name} (ID: ${meeting.id})`);
+    setSelectedMeeting(meeting);
+    // Set the meeting name in the context
+    setMeetingName(meeting.name);
     
     // Clear processed messages cache for the new meeting
     processedMessagesRef.current.clear();
     
     // If the meeting has transcript data, use it directly
     if (meeting.transcript && meeting.transcript.length > 0) {
-      console.log("Using meeting transcript data, first 3 messages:", 
-        meeting.transcript.slice(0, 3).map(msg => ({
-          id: msg.id,
-          speaker: msg.speaker,
-          timestamp: msg.timestamp,
-          call_time: msg.call_time,
-          capture_time: msg.capture_time,
-          content: msg.content?.substring(0, 30)
-        }))
-      );
+      console.log(`[Transcript] Processing transcript data: ${meeting.transcript.length} messages`);
       
       // Log any potentially problematic timestamp formats
       const missingCallTime = meeting.transcript.filter(msg => msg.call_time === undefined).length;
@@ -191,7 +245,12 @@ const Transcript = () => {
         };
       });
       
+      // Set messages state and transcript context data in sequence
       setMessages(sanitizedTranscript);
+      
+      // Explicitly set transcript data in context to ensure AI has access to it
+      console.log(`[Transcript] Setting ${sanitizedTranscript.length} messages in TranscriptContext`);
+      setTranscriptData(sanitizedTranscript);
       
       // Calculate speaker statistics
       const stats: Record<string, number> = {};
@@ -201,9 +260,10 @@ const Transcript = () => {
       });
       setSpeakerStats(stats);
     } else {
-      console.log("No transcript data in meeting object");
+      console.log("[Transcript] No transcript data in meeting object");
       // Clear previous messages if no transcript is available
       setMessages([]);
+      setTranscriptData(null);
       setSpeakerStats({});
     }
     
@@ -469,18 +529,14 @@ const Transcript = () => {
 
   // Update the navigation back to the meeting list
   const handleBackToMeetingList = () => {
-    // Clear selected meeting
+    // Navigate to the meeting list view
+    console.log("[Transcript] Navigating back to meeting list");
+    navigateToMeetingList();
+    
+    // Clear the selected meeting
     setSelectedMeeting(null);
-    
-    // Reset other state as needed
     setMessages([]);
-    setSpeakerStats({});
-    setSearchQuery("");
-    setSearchResults([]);
-    setCurrentSearchIndex(0);
-    
-    // Update the URL to reflect we're back on the meeting list page
-    navigate('/transcript', { replace: true });
+    setTranscriptData(null);
   };
 
   // Register the navigation handler with the context
@@ -495,18 +551,51 @@ const Transcript = () => {
 
   // Listen for changes to the URL that might affect the selected meeting
   useEffect(() => {
-    const handlePopState = () => {
-      // If user navigates back using browser buttons, clear selected meeting
-      if (window.location.pathname === '/transcript' && selectedMeeting) {
+    const checkUrlForStateChange = () => {
+      // Get the current path
+      const currentPath = window.location.pathname;
+      console.log(`[Transcript] URL check, current path: ${currentPath}`);
+      
+      // Check if we're now on the root path (meeting list view)
+      if (currentPath === '/' && selectedMeeting) {
+        console.log('[Transcript] At root path - clearing selected meeting');
         setSelectedMeeting(null);
+        setMessages([]);
+        setTranscriptData(null);
+        setSpeakerStats({});
       }
+      
+      // If we're on a detail page but don't have the right meeting selected
+      if (currentPath.startsWith('/t/')) {
+        const idFromPath = currentPath.split('/')[2];
+        if (idFromPath && (!selectedMeeting || selectedMeeting.id !== idFromPath)) {
+          console.log(`[Transcript] URL changed to meeting ${idFromPath}, but selected meeting doesn't match`);
+          // If meetings are loaded, try to select the matching one
+          if (meetings) {
+            const matchingMeeting = meetings.find(m => m.id === idFromPath);
+            if (matchingMeeting) {
+              console.log(`[Transcript] Found matching meeting for ID ${idFromPath}, selecting it`);
+              handleMeetingSelect(matchingMeeting);
+            }
+          }
+        }
+      }
+    };
+
+    // Check URL on component mount and location changes
+    checkUrlForStateChange();
+
+    // Also listen for popstate events (browser back/forward)
+    const handlePopState = () => {
+      console.log(`[Transcript] Popstate detected`);
+      checkUrlForStateChange();
     };
 
     window.addEventListener('popstate', handlePopState);
     return () => {
       window.removeEventListener('popstate', handlePopState);
     };
-  }, [selectedMeeting]);
+  }, [selectedMeeting, meetings, handleMeetingSelect, setTranscriptData, location.pathname]);
 
   useEffect(() => {
     if (!selectedMeeting || !user_name) return;
@@ -601,10 +690,14 @@ const Transcript = () => {
                   };
                 });
                 
-                // Only set messages if we don't already have them from the meeting data
-                if (msgs.length > 0 && messages.length === 0) {
+                if (msgs.length > 0) {
+                  // Important: Update both local state and context
                   setMessages(msgs);
                   console.log(`Processed ${msgs.length} historical messages from WebSocket`);
+                  
+                  // CRITICAL: Set transcript data in context to ensure AI has access
+                  console.log(`[Transcript] Setting ${msgs.length} messages in TranscriptContext from WebSocket`);
+                  setTranscriptData(msgs);
                   
                   // Calculate speaker statistics
                   const stats: Record<string, number> = {};
@@ -614,7 +707,7 @@ const Transcript = () => {
                   });
                   setSpeakerStats(stats);
                 } else {
-                  console.log("Skipping WebSocket transcript history as we already have messages");
+                  console.warn("Initial state has no transcript history");
                 }
               } else {
                 console.warn("Initial state has no transcript history");
@@ -1213,12 +1306,12 @@ const Transcript = () => {
                           setNewActionItem("");
                         }
                       }}
-                      onDeleteItem={(id) => {
+                      onDeleteItem={(id: string) => {
                         setActionItems((items) =>
                           items.filter((item) => item.id !== id)
                         );
                       }}
-                      onEditItem={(id, content) => {
+                      onEditItem={(id: string, content: string) => {
                         setActionItems((items) =>
                           items.map((item) =>
                             item.id === id

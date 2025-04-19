@@ -299,9 +299,13 @@ export const processUserMessage = async (
  * Get system prompt based on context
  */
 const getSystemPrompt = (context?: { page?: string; meetingId?: string; transcriptData?: any }): string => {
-  const basePrompt = "You are a helpful AI assistant specialized in helping users understand and analyze meeting transcripts. Provide concise, accurate responses. If you don't know something, say so rather than making up information.";
+  // Get username from localStorage
+  const username = localStorage.getItem("username") || "Unknown User";
+  
+  const basePrompt = `You are a helpful AI assistant specialized in helping users understand and analyze meeting transcripts. Provide concise, accurate responses. If you don't know something, say so rather than making up information. The user's username is: ${username}.`;
   
   console.log("[aiService] Building system prompt with context:", {
+    username,
     page: context?.page,
     meetingId: context?.meetingId,
     hasTranscriptData: !!context?.transcriptData,
@@ -496,7 +500,7 @@ export const getContextualSuggestions = (
   }
 ): string[] => {
   // Check if we're in transcript detail view by looking at window.transcriptData or context
-  const isDetailView = (context.meetingId && context.page === 'transcript') || 
+  const isDetailView = (context.meetingId && context.page === 'transcript-detail') || 
                        (window.location.pathname.includes('/transcript') && 
                         window.transcriptData && window.transcriptData.length > 0);
   

@@ -80,3 +80,51 @@ code {
   box-shadow: none !important;
   ring: 0 !important;
 }
+
+/* Add subtle scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: rgba(166, 173, 186, 0.2);
+  border-radius: 20px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(166, 173, 186, 0.4);
+}
+
+/* Hide scrollbar when not in use, but keep functionality */
+.hide-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+
+.hide-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.hide-scrollbar::-webkit-scrollbar-thumb {
+  background-color: transparent;
+  transition: background-color 0.3s;
+}
+
+.hide-scrollbar:hover::-webkit-scrollbar-thumb {
+  background-color: rgba(166, 173, 186, 0.2);
+}
+
+/* Apply the hide-scrollbar class to meeting list container */
+.meeting-list-container {
+  @apply hide-scrollbar;
+}
+
+/* Apply subtle scrolling to the main content area */
+.main-content {
+  @apply hide-scrollbar;
+}

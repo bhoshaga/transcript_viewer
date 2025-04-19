@@ -1,9 +1,36 @@
 import { type ClassValue, clsx } from "clsx"
 import { twMerge } from "tailwind-merge"
+import { getEnv } from "./useEnv"
  
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
+
+/**
+ * Debug logger that only outputs to console when DEBUG environment variable is true
+ */
+export const logger = {
+  log: (...args: any[]) => {
+    if (getEnv().DEBUG) {
+      console.log(...args);
+    }
+  },
+  error: (...args: any[]) => {
+    if (getEnv().DEBUG) {
+      console.error(...args);
+    }
+  },
+  warn: (...args: any[]) => {
+    if (getEnv().DEBUG) {
+      console.warn(...args);
+    }
+  },
+  info: (...args: any[]) => {
+    if (getEnv().DEBUG) {
+      console.info(...args);
+    }
+  }
+};
 
 /**
  * Formats a timestamp to a consistent display format
@@ -17,9 +44,6 @@ export function formatTimestamp(
   call_time?: string, 
   capture_time?: string
 ): string {
-  // Log the raw inputs for debugging
-  console.log(`formatTimestamp inputs:`, { timestamp, call_time, capture_time });
-  
   // If we have both call_time and capture_time, format them together
   if (call_time && capture_time) {
     try {
@@ -67,13 +91,11 @@ export function formatTimestamp(
   if (timestamp) {
     // Handle undefined or null timestamps
     if (timestamp === undefined || timestamp === null) {
-      console.log('Timestamp is undefined or null');
       return '00:00'; // Default fallback value
     }
     
     // Check if timestamp is in "HH:MM" format (like "10:00")
     if (/^\d{1,2}:\d{2}$/.test(timestamp)) {
-      console.log(`Valid HH:MM format: ${timestamp}`);
       return timestamp; // Return as is
     }
     
@@ -86,7 +108,6 @@ export function formatTimestamp(
           second: '2-digit',
           hour12: true
         });
-        console.log(`Parsed ISO timestamp ${timestamp} to ${formatted}`);
         return formatted;
       } catch (error) {
         console.error("Error formatting ISO timestamp:", error);
@@ -94,15 +115,11 @@ export function formatTimestamp(
       }
     }
     
-    // For debugging, log unknown timestamp formats
-    console.log(`Unknown timestamp format in utils: "${timestamp}"`);
-    
     // If the timestamp contains commas, it might be a speaker name mixed in
     // Try to extract just the time portion if possible
     if (typeof timestamp === 'string') {
       const timeMatch = timestamp.match(/\d{1,2}:\d{2}/);
       if (timeMatch) {
-        console.log(`Extracted time from complex string: ${timeMatch[0]}`);
         return timeMatch[0];
       }
     }

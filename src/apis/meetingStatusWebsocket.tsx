@@ -1,4 +1,5 @@
 import { Meeting } from "../types";
+import { logger } from "../lib/utils";
 
 export interface MeetingStatusHandlers {
   onMeetingEnded?: (meetingId: string, endTime: string) => void;
@@ -29,7 +30,7 @@ export default class MeetingStatusWebsocket {
       this.ws = new WebSocket(wsUrl);
       this.setupEventListeners();
     } catch (error) {
-      console.error("Error connecting to WebSocket:", error);
+      logger.error("Error connecting to WebSocket:", error);
       this.attemptReconnect();
     }
   }
@@ -38,7 +39,7 @@ export default class MeetingStatusWebsocket {
     if (!this.ws) return;
     
     this.ws.onopen = () => {
-      console.log("Connected to meeting status WebSocket");
+      logger.log("Connected to meeting status WebSocket");
       this.reconnectAttempts = 0;
       if (this.handlers.onConnectionChange) {
         this.handlers.onConnectionChange("CONNECTED");
@@ -50,12 +51,12 @@ export default class MeetingStatusWebsocket {
         const data = JSON.parse(event.data);
         this.handleMessage(data);
       } catch (error) {
-        console.error("Error parsing WebSocket message:", error);
+        logger.error("Error parsing WebSocket message:", error);
       }
     };
     
     this.ws.onclose = (event) => {
-      console.log("Meeting status WebSocket closed:", event.code, event.reason);
+      logger.log("Meeting status WebSocket closed:", event.code, event.reason);
       if (this.handlers.onConnectionChange) {
         this.handlers.onConnectionChange("DISCONNECTED");
       }
@@ -64,7 +65,7 @@ export default class MeetingStatusWebsocket {
     };
     
     this.ws.onerror = (error) => {
-      console.error("Meeting status WebSocket error:", error);
+      logger.error("Meeting status WebSocket error:", error);
       if (this.handlers.onError) {
         this.handlers.onError(error);
       }
@@ -77,7 +78,7 @@ export default class MeetingStatusWebsocket {
   handleMessage(data: any) {
     // Only handle meeting_ended events in this service
     if (data.type === "meeting_ended") {
-      console.log("Meeting ended event received:", this.meetingId);
+      logger.log("Meeting ended event received:", this.meetingId);
       const endTime = new Date().toISOString();
       
       if (this.handlers.onMeetingEnded) {
@@ -88,7 +89,7 @@ export default class MeetingStatusWebsocket {
   
   attemptReconnect() {
     if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-      console.log("Max reconnect attempts reached, giving up");
+      logger.log("Max reconnect attempts reached, giving up");
       return;
     }
     
@@ -99,7 +100,7 @@ export default class MeetingStatusWebsocket {
       30000
     );
     
-    console.log(`Attempting to reconnect in ${delay}ms (attempt ${this.reconnectAttempts})`);
+    logger.log(`Attempting to reconnect in ${delay}ms (attempt ${this.reconnectAttempts})`);
     
     this.reconnectTimeout = setTimeout(() => {
       this.connect();
