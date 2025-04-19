@@ -31,6 +31,7 @@
     "styled-components": "^6.1.13",
     "tailwind-merge": "^2.5.4",
     "tailwindcss-animate": "^1.0.7",
+    "tiktoken": "^1.0.13",
     "typescript": "^4.9.5",
     "web-vitals": "^2.1.4",
     "ws": "^8.18.0"
@@ -39,7 +40,8 @@
     "start": "react-scripts start",
     "build": "CI=false react-scripts build",
     "test": "react-scripts test",
-    "eject": "react-scripts eject"
+    "eject": "react-scripts eject",
+    "postinstall": "npx update-browserslist-db@latest"
   },
   "eslintConfig": {
     "extends": [
