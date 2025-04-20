@@ -80,7 +80,12 @@ const Transcript = () => {
   const [user_name, setUser_name] = useState<string | null>(null);
   const [meetings, setMeetings] = useState<Meeting[] | null>(null);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
+  const [isTranscriptLoading, setIsTranscriptLoading] = useState(false);
+  const [transcriptLoadStartTime, setTranscriptLoadStartTime] = useState<number | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isPrefetching, setIsPrefetching] = useState(false);
+  const [prefetchedMeetingId, setPrefetchedMeetingId] = useState<string | null>(null);
+  const [prefetchedMessages, setPrefetchedMessages] = useState<Message[]>([]);
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [socket, setSocket] = useState<WebSocket | null>(null);
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -102,6 +107,8 @@ const Transcript = () => {
   const [hoveredDelete, setHoveredDelete] = useState<string | null>(null);
   const [speakerStats, setSpeakerStats] = useState<Record<string, number>>({});
   const processedMessagesRef = useRef<Set<string>>(new Set());
+  // Add a ref to track the timeout ID so it can be accessed from multiple places
+  const transcriptTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<number[]>([]);
@@ -112,6 +119,9 @@ const Transcript = () => {
   const params = useParams<{ id?: string }>();
   const meetingIdFromUrl = params.id;
   const { registerNavigateHandler } = useBreadcrumb();
+
+  // Reference to store the prefetch WebSocket
+  const prefetchWebSocketRef = useRef<WebSocket | null>(null);
 
   useEffect(() => {
     const fetchMeetingsData = async (isInitialFetch = false) => {
@@ -173,11 +183,12 @@ const Transcript = () => {
     // Initial fetch - pass true to indicate it's the initial load
     fetchMeetingsData(true);
     
-    // Set up polling interval for refreshes - but only for active meetings
+    // Set up polling interval for refreshes - but ONLY when in list view (no selected meeting)
+    // This is the opposite of the current logic which only polls when in detail view with an active meeting
     let pollingInterval: NodeJS.Timeout | null = null;
     
-    if (selectedMeeting?.is_active) {
-      console.log('[Transcript] Setting up polling for active meeting');
+    if (!selectedMeeting) {
+      console.log('[Transcript] Setting up polling for meeting list view (every 10 seconds)');
       pollingInterval = setInterval(() => fetchMeetingsData(false), 10000);
     }
     
@@ -188,12 +199,268 @@ const Transcript = () => {
         clearInterval(pollingInterval);
       }
     };
-  }, [meetingIdFromUrl, navigateToMeetingList, navigate, selectedMeeting?.is_active, selectedMeeting?.id]);
+  }, [meetingIdFromUrl, navigateToMeetingList, navigate, selectedMeeting?.id]);
+
+  // Prefetch transcript data for the most recent meeting when in list view
+  useEffect(() => {
+    // Only prefetch when in list view and not already prefetching
+    if (selectedMeeting || !meetings || meetings.length === 0 || isPrefetching) {
+      console.log('[Transcript] Skipping prefetch because:', 
+        selectedMeeting ? 'meeting is selected' : 
+        !meetings ? 'no meetings data' : 
+        meetings.length === 0 ? 'meetings array is empty' : 
+        'already prefetching');
+      return;
+    }
+    
+    // Find the most recent meeting by start_time, regardless of active status
+    const sortedMeetings = [...meetings].sort((a, b) => {
+      // Try to parse dates if they're ISO strings
+      try {
+        const dateA = a.start_time ? new Date(a.start_time).getTime() : 0;
+        const dateB = b.start_time ? new Date(b.start_time).getTime() : 0;
+        // Sort in descending order (most recent first)
+        return dateB - dateA;
+      } catch (e) {
+        // If date parsing fails, just return 0 (no change in order)
+        return 0;
+      }
+    });
+    
+    // Take the most recent meeting
+    const mostRecentMeeting = sortedMeetings[0];
+    
+    if (!mostRecentMeeting) {
+      console.log('[Transcript] No meetings available for prefetching');
+      return;
+    }
+    
+    // If we've already prefetched this meeting, don't prefetch again
+    if (prefetchedMeetingId === mostRecentMeeting.id) {
+      console.log(`[Transcript] Already prefetched most recent meeting: ${mostRecentMeeting.name} (${mostRecentMeeting.id})`);
+      return;
+    }
+    
+    // Start prefetching the most recent meeting
+    console.log(`[Transcript] Starting prefetch for the most recent meeting: ${mostRecentMeeting.name} (${mostRecentMeeting.date || new Date(mostRecentMeeting.start_time || '').toLocaleDateString()})`);
+    startPrefetching(mostRecentMeeting);
+    
+    // Cleanup function for when component unmounts or dependencies change
+    return () => {
+      // Close any existing prefetch WebSocket
+      if (prefetchWebSocketRef.current) {
+        console.log('[Transcript] Cleaning up prefetch WebSocket connection');
+        prefetchWebSocketRef.current.close();
+        prefetchWebSocketRef.current = null;
+      }
+    };
+  }, [meetings, selectedMeeting, isPrefetching, prefetchedMeetingId, user_name]);
+
+  // Function to start prefetching transcript data
+  const startPrefetching = (meeting: Meeting) => {
+    if (!user_name) {
+      console.log('[Transcript] Cannot prefetch: no user name available');
+      return;
+    }
+    
+    console.log(`[Transcript] Prefetching transcript data for meeting: ${meeting.name} (ID: ${meeting.id})`);
+    setIsPrefetching(true);
+    // Only set the prefetched meeting ID after we successfully get data
+    // This prevents marking meetings as "prefetched" when they haven't been
+    
+    // Start a timer to track prefetch duration
+    const prefetchStartTime = Date.now();
+    
+    // If the meeting already has transcript data, use it directly
+    if (meeting.transcript && meeting.transcript.length > 0) {
+      console.log(`[Transcript] Using existing transcript data for prefetch: ${meeting.transcript.length} messages`);
+      
+      // Process the transcript data similarly to handleMeetingSelect
+      const sanitizedTranscript = meeting.transcript.map(msg => ({
+        ...msg,
+        call_time: msg.call_time || msg.timestamp || "00:00",
+        capture_time: msg.capture_time || undefined
+      }));
+      
+      // Store the prefetched data
+      setPrefetchedMessages(sanitizedTranscript);
+      // Now it's safe to set the prefetchedMeetingId since we have data
+      setPrefetchedMeetingId(meeting.id);
+      
+      // Calculate the time it took to process the data
+      const prefetchTime = Date.now() - prefetchStartTime;
+      console.log(`[Transcript] Prefetch completed in ${prefetchTime}ms using existing transcript data for: ${meeting.name}`);
+      
+      setIsPrefetching(false);
+      return;
+    }
+    
+    // Maximum number of retry attempts
+    let retryCount = 0;
+    const MAX_RETRIES = 2;
+    
+    // Function to establish WebSocket connection with retry logic
+    const connectWithRetry = () => {
+      // If we've already retried too many times, give up
+      if (retryCount >= MAX_RETRIES) {
+        console.log(`[Transcript] Maximum prefetch retry attempts (${MAX_RETRIES}) reached for ${meeting.name}`);
+        setIsPrefetching(false);
+        return;
+      }
+      
+      // Close any existing prefetch WebSocket
+      if (prefetchWebSocketRef.current) {
+        prefetchWebSocketRef.current.close();
+        prefetchWebSocketRef.current = null;
+      }
+      
+      // Construct WebSocket URL
+      const wsUrl = `wss://api.stru.ai/ws/meetings/${meeting.id}/transcript?user=${user_name}`;
+      
+      try {
+        console.log(`[Transcript] Connecting to WebSocket for prefetching (attempt ${retryCount + 1}): ${wsUrl}`);
+        const prefetchWs = new WebSocket(wsUrl);
+        prefetchWebSocketRef.current = prefetchWs;
+        
+        // Add a timeout for WebSocket connection
+        const connectionTimeout = setTimeout(() => {
+          if (prefetchWebSocketRef.current === prefetchWs) {
+            console.log(`[Transcript] Prefetch WebSocket connection timeout after 10 seconds for meeting: ${meeting.id}`);
+            prefetchWs.close();
+            
+            // Try to reconnect
+            retryCount++;
+            setTimeout(connectWithRetry, 1000 * retryCount); // Exponential backoff
+          }
+        }, 10000);
+        
+        prefetchWs.onopen = () => {
+          // Clear the connection timeout
+          clearTimeout(connectionTimeout);
+          console.log(`[Transcript] Prefetch WebSocket connected for meeting: ${meeting.name} (ID: ${meeting.id})`);
+        };
+        
+        prefetchWs.onmessage = (event: MessageEvent) => {
+          try {
+            const message = JSON.parse(event.data) as WebSocketMessage;
+            
+            if (message.type === "initial_state" && message.data?.transcript?.history) {
+              // Calculate the time it took to receive the data
+              const prefetchTime = Date.now() - prefetchStartTime;
+              console.log(`[Transcript] Received prefetched transcript data in ${prefetchTime}ms: ${message.data.transcript.history.length} messages`);
+              
+              // Process the transcript data
+              const msgs = message.data.transcript.history.map((msg: any) => ({
+                id: msg.id || crypto.randomUUID(),
+                speaker: msg.speaker,
+                content: msg.text,
+                call_time: msg.call_time || msg.timestamp || "00:00",
+                capture_time: msg.capture_time || undefined,
+                timestamp: msg.timestamp || msg.call_time || "00:00",
+                isComplete: true,
+                isStarred: false,
+              }));
+              
+              // Only store if we have data
+              if (msgs.length > 0) {
+                // Store the prefetched data
+                setPrefetchedMessages(msgs);
+                // Only NOW set the prefetchedMeetingId - this is the crucial change
+                setPrefetchedMeetingId(meeting.id);
+                console.log(`[Transcript] Successfully prefetched ${msgs.length} messages for: ${meeting.name}`);
+              } else {
+                console.log(`[Transcript] Received empty transcript, not storing prefetched data`);
+              }
+              
+              // We've successfully prefetched, so close the WebSocket
+              if (prefetchWebSocketRef.current) {
+                prefetchWebSocketRef.current.close();
+                prefetchWebSocketRef.current = null;
+              }
+              setIsPrefetching(false);
+            }
+          } catch (error) {
+            console.error("[Transcript] Error processing prefetch message:", error);
+          }
+        };
+        
+        prefetchWs.onerror = (error: Event) => {
+          console.error("[Transcript] Prefetch WebSocket error:", error);
+          // Clear the connection timeout
+          clearTimeout(connectionTimeout);
+          
+          // Try to reconnect on error unless we've already received data
+          if (prefetchedMessages.length === 0) {
+            retryCount++;
+            console.log(`[Transcript] Will retry prefetch connection for ${meeting.name} (attempt ${retryCount} of ${MAX_RETRIES})`);
+            setTimeout(connectWithRetry, 1000 * retryCount); // Exponential backoff
+          } else {
+            setIsPrefetching(false);
+          }
+        };
+        
+        prefetchWs.onclose = (event: CloseEvent) => {
+          // Clear the connection timeout
+          clearTimeout(connectionTimeout);
+          // Log the close reason
+          console.log(`[Transcript] Prefetch WebSocket closed for ${meeting.name}: Code ${event.code} ${event.reason}`);
+          
+          // Check if this is the current WebSocket reference
+          if (prefetchWebSocketRef.current === prefetchWs) {
+            prefetchWebSocketRef.current = null;
+            
+            // If we didn't receive any data and the connection closed abnormally, consider retry
+            if (prefetchedMessages.length === 0 && event.code !== 1000 && event.code !== 1001) { // Not a normal close
+              retryCount++;
+              if (retryCount < MAX_RETRIES) {
+                console.log(`[Transcript] WebSocket closed abnormally, will retry prefetch for ${meeting.name} (attempt ${retryCount} of ${MAX_RETRIES})`);
+                setTimeout(connectWithRetry, 1000 * retryCount); // Exponential backoff
+              } else {
+                console.log(`[Transcript] Maximum retry attempts reached, giving up on prefetching ${meeting.name}`);
+                setIsPrefetching(false);
+              }
+            } else if (prefetchedMessages.length === 0) {
+              // If we still have no data after all retries, or normal close with no data
+              console.log(`[Transcript] Prefetch yielded no data for ${meeting.name} - WebSocket closed`);
+              setIsPrefetching(false);
+            }
+          }
+        };
+      } catch (error) {
+        console.error("[Transcript] Error setting up prefetch WebSocket:", error);
+        setIsPrefetching(false);
+      }
+    };
+    
+    // Start the connection process
+    connectWithRetry();
+  };
 
   const handleMeetingSelect = async (meeting: Meeting) => {
+    // Set transcript loading to true at the beginning and record start time
+    setIsTranscriptLoading(true);
+    const startTime = Date.now();
+    setTranscriptLoadStartTime(startTime);
+    console.log(`[Transcript] Started loading transcript data for ${meeting.name} at ${new Date(startTime).toISOString()}`);
+    
+    // Clear any existing timeout
+    if (transcriptTimeoutRef.current) {
+      clearTimeout(transcriptTimeoutRef.current);
+      transcriptTimeoutRef.current = null;
+    }
+    
+    // Set a timeout for transcript data loading (15 seconds)
+    transcriptTimeoutRef.current = setTimeout(() => {
+      // Store the ID to check later if this is the current timeout
+      console.log(`[Transcript] Timed out after 15 seconds waiting for transcript data for ${meeting.name}`);
+      setIsTranscriptLoading(false);
+      setTranscriptLoadStartTime(null);
+      transcriptTimeoutRef.current = null;
+    }, 15000);
+
     // If not already on the meeting detail URL, navigate to it first
     if (!meetingIdFromUrl || meetingIdFromUrl !== meeting.id) {
-      console.log(`[Transcript] Navigating to meeting detail: /t/${meeting.id}`);
+      console.log(`[Transcript] Navigating to meeting detail: /t/${meeting.id} (${meeting.name})`);
       // Set selected meeting first to avoid flash of empty content
       setSelectedMeeting(meeting);
       // Set the meeting name in the context
@@ -210,10 +477,67 @@ const Transcript = () => {
     
     // Clear processed messages cache for the new meeting
     processedMessagesRef.current.clear();
+
+    // Check if we have prefetched data for this meeting
+    const hasPrefetchedData = meeting.id === prefetchedMeetingId && prefetchedMessages.length > 0;
     
+    if (hasPrefetchedData) {
+      console.log(`[Transcript] Using prefetched transcript data for ${meeting.name}: ${prefetchedMessages.length} messages`);
+      
+      // Calculate and log the time it took to load the data
+      if (transcriptLoadStartTime) {
+        const loadTime = Date.now() - transcriptLoadStartTime;
+        console.log(`[Transcript] Loaded ${prefetchedMessages.length} messages in ${loadTime}ms from prefetched data for ${meeting.name}`);
+      }
+      
+      // Make a copy to avoid potential issues with state references
+      const prefetchedMessagesClone = [...prefetchedMessages];
+      
+      // Use the prefetched data directly
+      setMessages(prefetchedMessagesClone);
+      
+      // Explicitly set transcript data in context to ensure AI has access to it
+      console.log(`[Transcript] Setting ${prefetchedMessagesClone.length} messages in TranscriptContext from prefetched data`);
+      setTranscriptData(prefetchedMessagesClone);
+      
+      // Calculate speaker statistics
+      const stats: Record<string, number> = {};
+      prefetchedMessagesClone.forEach((msg: Message) => {
+        const speaker = msg.speaker;
+        stats[speaker] = (stats[speaker] || 0) + 1;
+      });
+      setSpeakerStats(stats);
+      
+      // Clear the timeout and set loading to false since we have data
+      if (transcriptTimeoutRef.current) {
+        console.log(`[Transcript] Clearing timeout as prefetched data is available for ${meeting.name}`);
+        clearTimeout(transcriptTimeoutRef.current);
+        transcriptTimeoutRef.current = null;
+      }
+      setIsTranscriptLoading(false);
+      setTranscriptLoadStartTime(null);
+      
+      // Clear prefetched data after using it
+      console.log(`[Transcript] Clearing prefetched data after using it for ${meeting.name}`);
+      setTimeout(() => {
+        setPrefetchedMeetingId(null);
+        setPrefetchedMessages([]);
+      }, 0);
+      
+      // Always establish a WebSocket connection to receive status updates and new transcript data
+      // This ensures we detect if an inactive meeting becomes active again
+      console.log(`[Transcript] Establishing WebSocket connection for ${meeting.name} (active: ${meeting.is_active})`);
+      // The WebSocket connection will be established in the useEffect below
+    }
     // If the meeting has transcript data, use it directly
-    if (meeting.transcript && meeting.transcript.length > 0) {
-      console.log(`[Transcript] Processing transcript data: ${meeting.transcript.length} messages`);
+    else if (meeting.transcript && meeting.transcript.length > 0) {
+      console.log(`[Transcript] No prefetched data available for ${meeting.name}, using transcript data from meeting object: ${meeting.transcript.length} messages`);
+      
+      // Calculate and log the time it took to load the data
+      if (transcriptLoadStartTime) {
+        const loadTime = Date.now() - transcriptLoadStartTime;
+        console.log(`[Transcript] Loaded ${meeting.transcript.length} messages in ${loadTime}ms from initial data for ${meeting.name}`);
+      }
       
       // Log any potentially problematic timestamp formats
       const missingCallTime = meeting.transcript.filter(msg => msg.call_time === undefined).length;
@@ -249,7 +573,7 @@ const Transcript = () => {
       setMessages(sanitizedTranscript);
       
       // Explicitly set transcript data in context to ensure AI has access to it
-      console.log(`[Transcript] Setting ${sanitizedTranscript.length} messages in TranscriptContext`);
+      console.log(`[Transcript] Setting ${sanitizedTranscript.length} messages in TranscriptContext for ${meeting.name}`);
       setTranscriptData(sanitizedTranscript);
       
       // Calculate speaker statistics
@@ -259,12 +583,32 @@ const Transcript = () => {
         stats[speaker] = (stats[speaker] || 0) + 1;
       });
       setSpeakerStats(stats);
+      
+      // Clear the timeout and set loading to false since we have data
+      if (transcriptTimeoutRef.current) {
+        console.log(`[Transcript] Clearing timeout as meeting object contains transcript data for ${meeting.name}`);
+        clearTimeout(transcriptTimeoutRef.current);
+        transcriptTimeoutRef.current = null;
+      }
+      setIsTranscriptLoading(false);
+      setTranscriptLoadStartTime(null);
     } else {
-      console.log("[Transcript] No transcript data in meeting object");
+      console.log(`[Transcript] No transcript data in meeting object for ${meeting.name}`);
       // Clear previous messages if no transcript is available
       setMessages([]);
       setTranscriptData(null);
       setSpeakerStats({});
+      
+      // For inactive meetings, we can immediately show no data
+      if (!meeting.is_active) {
+        if (transcriptTimeoutRef.current) {
+          console.log(`[Transcript] Clearing timeout as ${meeting.name} is inactive and has no transcript`);
+          clearTimeout(transcriptTimeoutRef.current);
+          transcriptTimeoutRef.current = null;
+        }
+        setIsTranscriptLoading(false);
+      }
+      // For active meetings, we'll wait for the timeout or WebSocket data
     }
     
     // Then try to join the meeting
@@ -272,11 +616,11 @@ const Transcript = () => {
       try {
         const joinResult = await joinMeeting(meeting.id, user_name);
         if (!joinResult.success) {
-          console.warn("Couldn't join meeting, but will still display content:", joinResult.message);
+          console.warn(`Couldn't join meeting ${meeting.name}, but will still display content:`, joinResult.message);
           // We're continuing anyway to display the meeting content
         }
       } catch (error) {
-        console.error("Join meeting error:", error);
+        console.error(`Join meeting error for ${meeting.name}:`, error);
         // Continue to display the meeting even if join fails
       }
     }
@@ -653,6 +997,22 @@ const Transcript = () => {
           switch (message.type) {
             case "initial_state":
               console.log("Received initial state");
+              
+              // Important: Clear loading state and timeout immediately when we receive data
+              setIsTranscriptLoading(false);
+              if (transcriptLoadStartTime) {
+                const loadTime = Date.now() - transcriptLoadStartTime;
+                console.log(`[Transcript] Cancelling loading timeout as data was received in ${loadTime}ms for ${selectedMeeting.name}`);
+                setTranscriptLoadStartTime(null);
+              }
+              
+              // Clear the timeout using the ref
+              if (transcriptTimeoutRef.current) {
+                console.log(`[Transcript] Clearing timeout from WebSocket handler for ${selectedMeeting.name}`);
+                clearTimeout(transcriptTimeoutRef.current);
+                transcriptTimeoutRef.current = null;
+              }
+              
               if (message.data?.transcript?.history) {
                 console.log("Initial state transcript history sample:", 
                   message.data.transcript.history.slice(0, 3).map((h: any) => ({
@@ -664,6 +1024,12 @@ const Transcript = () => {
                     timestamp: h.timestamp
                   }))
                 );
+                
+                // Calculate time taken to load data via WebSocket if we're tracking load time
+                if (transcriptLoadStartTime) {
+                  const loadTime = Date.now() - transcriptLoadStartTime;
+                  console.log(`[Transcript] Received ${message.data.transcript.history.length} messages via WebSocket in ${loadTime}ms`);
+                }
                 
                 // Check for missing time fields in the data
                 const missingCallTime = message.data.transcript.history.filter((m: any) => m.call_time === undefined).length;
@@ -706,6 +1072,10 @@ const Transcript = () => {
                     stats[speaker] = (stats[speaker] || 0) + 1;
                   });
                   setSpeakerStats(stats);
+                  
+                  // Since we received data, stop showing loading state
+                  setIsTranscriptLoading(false);
+                  setTranscriptLoadStartTime(null);
                 } else {
                   console.warn("Initial state has no transcript history");
                 }
@@ -758,6 +1128,14 @@ const Transcript = () => {
                   newStats[speaker] = (newStats[speaker] || 0) + 1;
                   return newStats;
                 });
+                
+                // Since we received data, stop showing loading state
+                setIsTranscriptLoading(false);
+                if (transcriptLoadStartTime) {
+                  const loadTime = Date.now() - transcriptLoadStartTime;
+                  console.log(`[Transcript] Received first live transcript message in ${loadTime}ms`);
+                  setTranscriptLoadStartTime(null);
+                }
               }
               break;
               
@@ -822,6 +1200,14 @@ const Transcript = () => {
                     newStats[speaker] = (newStats[speaker] || 0) + 1;
                     return newStats;
                   });
+                }
+                
+                // Since we received data, stop showing loading state
+                setIsTranscriptLoading(false);
+                if (transcriptLoadStartTime) {
+                  const loadTime = Date.now() - transcriptLoadStartTime;
+                  console.log(`[Transcript] Received first transcript update in ${loadTime}ms`);
+                  setTranscriptLoadStartTime(null);
                 }
               }
               break;
@@ -943,7 +1329,7 @@ const Transcript = () => {
       if (reconnectInterval) clearInterval(reconnectInterval);
       if (heartbeatInterval) clearInterval(heartbeatInterval);
     };
-  }, [selectedMeeting, user_name]);
+  }, [selectedMeeting, user_name, transcriptLoadStartTime]);
 
   // Add search functionality
   useEffect(() => {
@@ -1267,18 +1653,64 @@ const Transcript = () => {
                         </CardHeader>
                         <CardContent className="flex-1 overflow-hidden p-0">
                           <div className="h-full p-4 overflow-y-auto hide-scrollbar">
-                            <MessageList
-                              messages={messages || []}
-                              hoveredDelete={hoveredDelete}
-                              onStar={toggleStar}
-                              onAddToActionItems={addToActionItems}
-                              onDelete={deleteMessage}
-                              onHoverDelete={setHoveredDelete}
-                              searchQuery={searchQuery}
-                              searchResults={searchResults}
-                              currentSearchIndex={currentSearchIndex}
-                              isLive={selectedMeeting?.is_active === true}
-                            />
+                            {messages.length > 0 ? (
+                              <MessageList
+                                messages={messages || []}
+                                hoveredDelete={hoveredDelete}
+                                onStar={toggleStar}
+                                onAddToActionItems={addToActionItems}
+                                onDelete={deleteMessage}
+                                onHoverDelete={setHoveredDelete}
+                                searchQuery={searchQuery}
+                                searchResults={searchResults}
+                                currentSearchIndex={currentSearchIndex}
+                                isLive={selectedMeeting?.is_active === true}
+                              />
+                            ) : isTranscriptLoading ? (
+                              <div className="space-y-2">
+                                {/* Display multiple skeleton loaders while loading */}
+                                {Array.from({ length: 8 }).map((_, i) => (
+                                  <div key={i} className="group flex items-start space-x-3 py-2 px-3 rounded-md transition-colors animate-pulse">
+                                    {/* Avatar skeleton */}
+                                    <div className="h-6 w-6 rounded-full bg-gray-200 dark:bg-gray-700 relative overflow-hidden">
+                                      <div className="shimmer-effect"></div>
+                                    </div>
+                                    <div className="flex-1 min-w-0 relative overflow-hidden">
+                                      {/* Header skeleton */}
+                                      <div className="flex items-center space-x-2">
+                                        {/* Speaker name skeleton */}
+                                        <div className="h-4 w-24 bg-gray-200 dark:bg-gray-700 rounded relative overflow-hidden">
+                                          <div className="shimmer-effect"></div>
+                                        </div>
+                                        {/* Timestamp skeleton */}
+                                        <div className="h-3 w-16 bg-gray-200 dark:bg-gray-700 rounded relative overflow-hidden">
+                                          <div className="shimmer-effect"></div>
+                                        </div>
+                                      </div>
+                                      {/* Content skeleton lines */}
+                                      <div className="mt-2 space-y-2 relative overflow-hidden">
+                                        <div className="h-3 w-full bg-gray-200 dark:bg-gray-700 rounded relative overflow-hidden">
+                                          <div className="shimmer-effect"></div>
+                                        </div>
+                                        <div className="h-3 w-4/5 bg-gray-200 dark:bg-gray-700 rounded relative overflow-hidden">
+                                          <div className="shimmer-effect"></div>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : selectedMeeting ? (
+                              <div className="flex flex-col items-center justify-center h-full text-center p-6">
+                                <FileText className="h-12 w-12 text-muted-foreground mb-4" />
+                                <h3 className="text-lg font-medium mb-2">No transcript available</h3>
+                                <p className="text-muted-foreground text-sm max-w-md">
+                                  {selectedMeeting.is_active 
+                                    ? "Transcript will appear here once the meeting starts recording."
+                                    : "No transcript was recorded for this meeting."}
+                                </p>
+                              </div>
+                            ) : null}
                           </div>
                         </CardContent>
                       </Card>
@@ -1287,41 +1719,117 @@ const Transcript = () => {
                 </div>
                 <div className="lg:col-span-4 overflow-hidden flex flex-col">
                   <div className="space-y-4 h-full flex flex-col overflow-hidden">
-                    <SpeakerStats stats={speakerStats} messages={messages} />
-                    <ActionItems
-                      items={actionItems}
-                      newItem={newActionItem}
-                      onNewItemChange={setNewActionItem}
-                      onAddItem={() => {
-                        if (newActionItem.trim()) {
-                          setActionItems([
-                            ...actionItems,
-                            {
-                              id: crypto.randomUUID(),
-                              content: newActionItem,
-                              isInferred: false,
-                              isEditing: false,
-                            },
-                          ]);
-                          setNewActionItem("");
-                        }
-                      }}
-                      onDeleteItem={(id: string) => {
-                        setActionItems((items) =>
-                          items.filter((item) => item.id !== id)
-                        );
-                      }}
-                      onEditItem={(id: string, content: string) => {
-                        setActionItems((items) =>
-                          items.map((item) =>
-                            item.id === id
-                              ? { ...item, content, isEditing: false }
-                              : item
-                          )
-                        );
-                      }}
-                      onSetEditing={setActionItems}
-                    />
+                    {messages.length > 0 ? (
+                      <>
+                        <SpeakerStats stats={speakerStats} messages={messages} />
+                        <ActionItems
+                          items={actionItems}
+                          newItem={newActionItem}
+                          onNewItemChange={setNewActionItem}
+                          onAddItem={() => {
+                            if (newActionItem.trim()) {
+                              setActionItems([
+                                ...actionItems,
+                                {
+                                  id: crypto.randomUUID(),
+                                  content: newActionItem,
+                                  isInferred: false,
+                                  isEditing: false,
+                                },
+                              ]);
+                              setNewActionItem("");
+                            }
+                          }}
+                          onDeleteItem={(id: string) => {
+                            setActionItems((items) =>
+                              items.filter((item) => item.id !== id)
+                            );
+                          }}
+                          onEditItem={(id: string, content: string) => {
+                            setActionItems((items) =>
+                              items.map((item) =>
+                                item.id === id
+                                  ? { ...item, content, isEditing: false }
+                                  : item
+                              )
+                            );
+                          }}
+                          onSetEditing={setActionItems}
+                        />
+                      </>
+                    ) : isTranscriptLoading ? (
+                      <>
+                        {/* Speaker Stats Skeleton */}
+                        <div className="bg-background rounded-lg border p-4 animate-pulse">
+                          <div className="mb-4 flex items-center justify-between">
+                            <div className="h-5 w-32 bg-gray-200 dark:bg-gray-700 rounded relative overflow-hidden">
+                              <div className="shimmer-effect"></div>
+                            </div>
+                          </div>
+                          <div className="space-y-3">
+                            {Array.from({ length: 3 }).map((_, i) => (
+                              <div key={i} className="flex items-center space-x-2">
+                                <div className="h-6 w-6 rounded-full bg-gray-200 dark:bg-gray-700 relative overflow-hidden">
+                                  <div className="shimmer-effect"></div>
+                                </div>
+                                <div className="flex-1">
+                                  <div className="h-4 w-24 mb-1 bg-gray-200 dark:bg-gray-700 rounded relative overflow-hidden">
+                                    <div className="shimmer-effect"></div>
+                                  </div>
+                                  <div className="w-full bg-gray-100 dark:bg-gray-800 h-2 rounded-full overflow-hidden">
+                                    <div className={`h-full ${i === 0 ? 'w-2/3' : i === 1 ? 'w-1/2' : 'w-1/4'} bg-gray-200 dark:bg-gray-700 relative overflow-hidden`}>
+                                      <div className="shimmer-effect"></div>
+                                    </div>
+                                  </div>
+                                </div>
+                                <div className="h-4 w-8 bg-gray-200 dark:bg-gray-700 rounded relative overflow-hidden">
+                                  <div className="shimmer-effect"></div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                        
+                        {/* Action Items Skeleton */}
+                        <div className="bg-background rounded-lg border overflow-hidden flex-1 flex flex-col animate-pulse">
+                          <div className="p-4 border-b">
+                            <div className="h-5 w-32 bg-gray-200 dark:bg-gray-700 rounded relative overflow-hidden">
+                              <div className="shimmer-effect"></div>
+                            </div>
+                          </div>
+                          <div className="p-4 space-y-3 flex-1">
+                            {Array.from({ length: 3 }).map((_, i) => (
+                              <div key={i} className="flex items-start space-x-2">
+                                <div className="h-4 w-4 mt-1 rounded bg-gray-200 dark:bg-gray-700 relative overflow-hidden">
+                                  <div className="shimmer-effect"></div>
+                                </div>
+                                <div className="flex-1 h-4 bg-gray-200 dark:bg-gray-700 rounded relative overflow-hidden">
+                                  <div className="shimmer-effect"></div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                          <div className="p-4 mt-auto border-t">
+                            <div className="h-9 w-full bg-gray-200 dark:bg-gray-700 rounded relative overflow-hidden">
+                              <div className="shimmer-effect"></div>
+                            </div>
+                          </div>
+                        </div>
+                      </>
+                    ) : selectedMeeting ? (
+                      <>
+                        <SpeakerStats stats={{}} messages={[]} />
+                        <ActionItems
+                          items={[]}
+                          newItem={newActionItem}
+                          onNewItemChange={setNewActionItem}
+                          onAddItem={() => {}}
+                          onDeleteItem={(id: string) => {}}
+                          onEditItem={(id: string, content: string) => {}}
+                          onSetEditing={() => {}}
+                        />
+                      </>
+                    ) : null}
                   </div>
                 </div>
               </div>
