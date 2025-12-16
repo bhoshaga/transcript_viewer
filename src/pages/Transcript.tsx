@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { Button } from "../components/ui/button";
 import {
   Card,
@@ -47,20 +47,20 @@ const getFirstName = (fullName: string): string => {
 };
 
 // Convert TranscriptBlock to legacy Message format for UI components
-const blockToMessage = (block: TranscriptBlock) => {
+const blockToMessage = (block: TranscriptBlock, index: number) => {
   const date = new Date(block.timestamp);
-  const minutes = Math.floor((block.timestamp % 3600000) / 60000);
+  const minutes = Math.floor(block.timestamp / 60000);
   const seconds = Math.floor((block.timestamp % 60000) / 1000);
   const callTime = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
 
   return {
-    id: block.messageId,
+    id: `block-${index}`,
     speaker: block.speakerName,
     content: block.transcript,
     timestamp: date.toISOString(),
     call_time: callTime,
     capture_time: date.toISOString(),
-    isStarred: block.isPinned,
+    isStarred: false,
     isComplete: true,
   };
 };
@@ -101,6 +101,9 @@ const Transcript = () => {
   const meetingIdFromUrl = params.id;
   const { registerNavigateHandler } = useBreadcrumb();
 
+  // Track if we've loaded from URL to prevent re-triggering
+  const hasLoadedFromUrl = useRef(false);
+
   // Fetch meetings list
   useEffect(() => {
     const fetchMeetingsData = async () => {
@@ -109,10 +112,11 @@ const Transcript = () => {
         const response = await listMeetings('MyMeetings');
         setMeetings(response.meetings);
 
-        // If we have a meetingId in the URL, load that meeting
-        if (meetingIdFromUrl && !selectedMeeting) {
+        // If we have a meetingId in the URL and haven't loaded yet, load that meeting
+        if (meetingIdFromUrl && !hasLoadedFromUrl.current) {
           const matchingMeeting = response.meetings.find(m => m.id === meetingIdFromUrl);
           if (matchingMeeting) {
+            hasLoadedFromUrl.current = true;
             handleMeetingSelect(matchingMeeting);
           } else {
             navigateToMeetingList();
@@ -131,24 +135,24 @@ const Transcript = () => {
     };
 
     fetchMeetingsData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [meetingIdFromUrl]);
 
-    // Polling only when in list view
-    let pollingInterval: NodeJS.Timeout | null = null;
-    if (!selectedMeeting) {
-      pollingInterval = setInterval(async () => {
-        try {
-          const response = await listMeetings('MyMeetings');
-          setMeetings(response.meetings);
-        } catch (error) {
-          console.error("Error refreshing meetings:", error);
-        }
-      }, 30000);
-    }
+  // Polling for meeting list updates (only when in list view)
+  useEffect(() => {
+    if (selectedMeeting) return;
 
-    return () => {
-      if (pollingInterval) clearInterval(pollingInterval);
-    };
-  }, [meetingIdFromUrl, navigateToMeetingList, selectedMeeting?.id]);
+    const pollingInterval = setInterval(async () => {
+      try {
+        const response = await listMeetings('MyMeetings');
+        setMeetings(response.meetings);
+      } catch (error) {
+        console.error("Error refreshing meetings:", error);
+      }
+    }, 30000);
+
+    return () => clearInterval(pollingInterval);
+  }, [selectedMeeting]);
 
   const handleMeetingSelect = useCallback(async (meeting: Meeting) => {
     setIsTranscriptLoading(true);
@@ -165,8 +169,8 @@ const Transcript = () => {
       const meetingWithTranscript = await getMeetingWithTranscript(meeting.id);
 
       if (meetingWithTranscript.transcript?.blocks) {
-        const blocks = meetingWithTranscript.transcript.blocks.filter(b => !b.isDeleted);
-        const msgs = blocks.map(blockToMessage);
+        const blocks = meetingWithTranscript.transcript.blocks;
+        const msgs = blocks.map((block, index) => blockToMessage(block, index));
 
         setMessages(msgs);
         setTranscriptData(msgs as any);
@@ -349,9 +353,9 @@ const Transcript = () => {
           <div className="container mx-auto px-4 py-8 h-full flex flex-col overflow-hidden">
             <div className="grid gap-8 h-full overflow-hidden">
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 h-full overflow-hidden">
-                <div className="lg:col-span-8 flex flex-col overflow-hidden">
-                  <div className="min-w-0 flex flex-col overflow-hidden">
-                    <div className="relative">
+                <div className="lg:col-span-8 flex flex-col overflow-hidden h-full">
+                  <div className="min-w-0 flex flex-col overflow-hidden flex-1">
+                    <div className="relative flex-shrink-0">
                       {!selectedMeeting.hasEnded && (
                         <div className="absolute top-6 right-6 flex items-center space-x-2 z-10">
                           <div className="w-3 h-3 rounded-full bg-green-500 animate-pulse" />
@@ -419,9 +423,7 @@ const Transcript = () => {
                       </Card>
                     </div>
 
-                    <div className="mb-4"></div>
-
-                    <Card className="flex-1 flex flex-col overflow-hidden">
+                    <Card className="flex-1 flex flex-col overflow-hidden mt-4">
                       <CardHeader className="flex flex-row items-center justify-between flex-shrink-0">
                         <CardTitle>Transcript</CardTitle>
                         <div className="w-64">
@@ -454,8 +456,8 @@ const Transcript = () => {
                           </div>
                         </div>
                       </CardHeader>
-                      <CardContent className="flex-1 overflow-hidden p-0">
-                        <div className="h-full p-4 overflow-y-auto hide-scrollbar">
+                      <CardContent className="flex-1 overflow-hidden p-0 flex flex-col">
+                        <div className="flex-1 p-4 overflow-y-auto hide-scrollbar">
                           {messages.length > 0 ? (
                             <MessageList
                               messages={messages}

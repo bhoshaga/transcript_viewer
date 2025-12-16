@@ -2,7 +2,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "./ui/card"
 import { Input } from "./ui/input"
 import { Button } from "./ui/button"
 import { Plus, Trash2 } from "lucide-react"
-import { ScrollArea } from "./ui/scroll-area"
 
 // Local types for this component
 interface ActionItem {
@@ -63,7 +62,7 @@ export function ActionItems({
               <Plus className="h-4 w-4" />
             </Button>
           </div>
-          <ScrollArea className="flex-1">
+          <div className="flex-1 overflow-y-auto">
             <div className="space-y-2">
               {items.map((item) => (
                 <div
@@ -100,7 +99,7 @@ export function ActionItems({
                 </div>
               ))}
             </div>
-          </ScrollArea>
+          </div>
         </div>
       </CardContent>
     </Card>
@@ -184,7 +183,7 @@ export function SpeakerStats({ stats, messages }: SpeakerStatsProps) {
           <CardTitle>Speaker Stats</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
-          <ScrollArea className="p-4 max-h-[40vh]">
+          <div className="p-4 max-h-[40vh] overflow-y-auto">
             <div className="space-y-4">
               {speakerPercentages.map(({ speaker, percentage }) => (
                 <div key={speaker} className="space-y-1">
@@ -203,7 +202,7 @@ export function SpeakerStats({ stats, messages }: SpeakerStatsProps) {
                 </div>
               ))}
             </div>
-          </ScrollArea>
+          </div>
         </CardContent>
       </Card>
     );
@@ -220,7 +219,7 @@ export function SpeakerStats({ stats, messages }: SpeakerStatsProps) {
           <CardTitle>Speaker Stats</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
-          <ScrollArea className="p-4 max-h-[40vh]">
+          <div className="p-4 max-h-[40vh] overflow-y-auto">
             <div className="space-y-4">
               {speakerPercentages.map(({ speaker, percentage }) => (
                 <div key={speaker} className="space-y-1">
@@ -240,7 +239,7 @@ export function SpeakerStats({ stats, messages }: SpeakerStatsProps) {
               ))}
               <div className="text-xs text-muted-foreground mt-2">Time data not available</div>
             </div>
-          </ScrollArea>
+          </div>
         </CardContent>
       </Card>
     );
@@ -274,7 +273,7 @@ export function SpeakerStats({ stats, messages }: SpeakerStatsProps) {
           <CardTitle>Speaker Stats</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
-          <ScrollArea className="p-4 max-h-[40vh]">
+          <div className="p-4 max-h-[40vh] overflow-y-auto">
             <div className="space-y-4">
               {speakerPercentages.map(({ speaker, percentage }) => (
                 <div key={speaker} className="space-y-1">
@@ -294,7 +293,7 @@ export function SpeakerStats({ stats, messages }: SpeakerStatsProps) {
               ))}
               <div className="text-xs text-muted-foreground mt-2">Unable to determine meeting duration</div>
             </div>
-          </ScrollArea>
+          </div>
         </CardContent>
       </Card>
     );
@@ -344,7 +343,7 @@ export function SpeakerStats({ stats, messages }: SpeakerStatsProps) {
         <CardTitle>Speaker Stats</CardTitle>
       </CardHeader>
       <CardContent className="p-0">
-        <ScrollArea className="p-4 max-h-[40vh]">
+        <div className="p-4 max-h-[40vh] overflow-y-auto">
           <div className="space-y-4">
             {speakerPercentages.map(({ speaker, percentage }) => {
               // Get consistent pastel color for this speaker
@@ -383,7 +382,7 @@ export function SpeakerStats({ stats, messages }: SpeakerStatsProps) {
               );
             })}
           </div>
-        </ScrollArea>
+        </div>
       </CardContent>
     </Card>
   );

@@ -1,5 +1,4 @@
 import React, { useEffect, useRef, useCallback } from "react";
-import { ScrollArea } from "./ui/scroll-area";
 import { Avatar, AvatarFallback } from "./ui/avatar";
 import { Button } from "./ui/button";
 import { Star, ListTodo } from "lucide-react";
@@ -167,7 +166,7 @@ export function MessageList({
   }, [messages, scrollToBottom, searchResults.length]);
 
   return (
-    <ScrollArea ref={scrollAreaRef} className="h-full">
+    <div ref={scrollAreaRef} className="h-full">
       <div className="space-y-2">
         {messages.map((message, index) => {
           const isSearchResult = searchResults.includes(index);
@@ -249,6 +248,6 @@ export function MessageList({
         {/* This div serves as our scroll target - always at the very bottom */}
         <div ref={scrollEndRef} className="h-px" />
       </div>
-    </ScrollArea>
+    </div>
   );
 }

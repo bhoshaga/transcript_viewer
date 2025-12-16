@@ -22,8 +22,8 @@ This document describes the backend API required to support the Stru Meet Chrome
               │                         │
               ▼                         ▼
      ┌────────────────┐        ┌────────────────┐
-     │   HTTP/REST    │        │   WebSocket    │
-     │   Endpoints    │        │  Subscriptions │
+     │  HTTP GraphQL  │        │   WebSocket    │
+     │  /api/2/graphql│        │  Subscriptions │
      └────────┬───────┘        └───────┬────────┘
               │                        │
               └──────────┬─────────────┘
@@ -31,19 +31,38 @@ This document describes the backend API required to support the Stru Meet Chrome
                          ▼
               ┌────────────────────┐
               │     FastAPI        │
-              │   main.py +        │
-              │   routers/*.py     │
+              │   main.py          │
+              └─────────┬──────────┘
+                        │
+                        ▼
+              ┌────────────────────┐
+              │  Strawberry GraphQL │
+              │  graphql_schema.py │
+              │  (proper schema +  │
+              │   introspection)   │
               └─────────┬──────────┘
                         │
            ┌────────────┼────────────┐
            │            │            │
            ▼            ▼            ▼
    ┌───────────┐ ┌───────────┐ ┌───────────┐
-   │  OpenAI   │ │ meet_db/  │ │  Local    │
-   │  (AI Chat)│ │ Supabase  │ │  Storage  │
-   └───────────┘ │ PostgreSQL│ │(screenshots)
-                 └───────────┘ └───────────┘
+   │ services/ │ │ meet_db/  │ │  Local    │
+   │ ai_agent  │ │ Supabase  │ │  Storage  │
+   │ (AI Chat) │ │ PostgreSQL│ │(screenshots)
+   └─────┬─────┘ └───────────┘ └───────────┘
+         │
+         ▼
+   ┌───────────┐
+   │  OpenAI   │
+   └───────────┘
 ```
+
+### Key Components
+
+- **Strawberry GraphQL** (`graphql_schema.py`): Proper GraphQL schema with introspection support. All GraphQL operations go through this.
+- **Services Layer** (`services/ai_agent.py`): Business logic for AI chat processing with background threads and WebSocket push.
+- **Database Layer** (`meet_db/`): All Supabase PostgreSQL operations.
+- **Main Server** (`main.py`): FastAPI app with WebSocket handlers, auth, and non-GraphQL endpoints (autosave, screenshots).
 
 ---
 
@@ -412,7 +431,9 @@ All GraphQL operations go through this endpoint.
 
 ## WebApp GraphQL Operations
 
-These operations are used by the Tactiq web application (not the extension). Handled by `server/routers/webapp_*.py`.
+These operations are used by the Tactiq web application (not the extension). All operations are handled by **Strawberry GraphQL** in `server/graphql_schema.py`.
+
+**Introspection**: The GraphQL schema supports introspection, so frontends can auto-discover available operations.
 
 ### Query: GetMeeting
 **Purpose**: Get meeting details (without transcript)
@@ -851,7 +872,10 @@ server/meet_db/
 
 | File/Directory | Purpose |
 |----------------|---------|
-| `server/main.py` | Main FastAPI server |
+| `server/main.py` | Main FastAPI server, WebSocket handlers, auth |
+| `server/graphql_schema.py` | **Strawberry GraphQL schema** - all GraphQL operations |
+| `server/services/` | Business logic services |
+| `server/services/ai_agent.py` | AI chat processing with background threads & WebSocket push |
 | `server/meet_db/` | Supabase database module |
 | `server/meet_db/__init__.py` | DB connection & exports |
 | `server/meet_db/schema.py` | SQL CREATE statements |
@@ -862,18 +886,13 @@ server/meet_db/
 | `server/meet_db/search.py` | Full-text search |
 | `server/meet_db/ai.py` | AI outputs & agent runs |
 | `server/meet_db/tasks.py` | Task management |
-| `server/routers/` | WebApp GraphQL handlers |
-| `server/routers/webapp_graphql.py` | Central GraphQL router |
-| `server/routers/webapp_meetings.py` | Meeting operations |
-| `server/routers/webapp_tasks.py` | Task & AI operations |
-| `server/routers/webapp_user.py` | User operations |
+| `server/routers/` | **(DEPRECATED)** Old webapp handlers - now in graphql_schema.py |
 | `server/tests/` | Unit tests |
 | `server/tests/run_db_tests.py` | DB function tests |
 | `server/requests/` | Debug: logged HTTP request JSON |
 | `server/ws_messages/` | Debug: logged WebSocket messages |
 | `server/transcripts/` | Debug: raw transcript JSON dumps |
 | `server/screenshots/` | Stored screenshots (local files) |
-| `server/ai_debug.log` | Debug: AI processing log |
 
 ---
 
@@ -978,3 +997,6 @@ Also update `manifest.json`:
 - **v1.5** - Added webapp routers for web app GraphQL operations
 - **v1.6** - Added Supabase PostgreSQL database integration
 - **v1.7** - Wired up all DB functions (Tasks, Shares, Search, AI Outputs, Agent Runs)
+- **v1.8** - Migrated to proper Strawberry GraphQL schema with introspection support
+- **v1.9** - Extracted AI agent logic to services layer (services/ai_agent.py)
+- **v2.0** - Performance optimizations: top-level imports, non-blocking DB calls, BigInt for timestamps

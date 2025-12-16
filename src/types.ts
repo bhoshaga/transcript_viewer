@@ -43,11 +43,18 @@ export interface MeetingPermissions {
   canShare: boolean;
 }
 
+export interface LabelStyle {
+  color: string;
+  line: string;
+  variant: string;
+}
+
 export interface Label {
   id: string;
   name: string;
-  color: string;
-  createdAt?: number;
+  description?: string;
+  style: LabelStyle;
+  filters?: unknown;
 }
 
 export interface Meeting {
@@ -75,13 +82,9 @@ export interface Meeting {
 // -----------------------------------------------------------------------------
 
 export interface TranscriptBlock {
-  messageId: string;
   speakerName: string;
   transcript: string;
   timestamp: number;
-  tags: string[];
-  isPinned: boolean;
-  isDeleted: boolean;
 }
 
 export interface Transcript {
@@ -99,6 +102,10 @@ export type TaskSource = 'MANUAL' | 'AI';
 
 export interface DueTime {
   date: string;
+}
+
+export interface TaskDueTime {
+  date?: string;
 }
 
 export interface Task {
@@ -217,20 +224,18 @@ export interface SearchTranscriptsResponse {
 // AI Outputs Types
 // -----------------------------------------------------------------------------
 
-export type AIOutputType = 'SUMMARY' | 'ACTION_ITEMS' | 'CUSTOM';
-export type AIOutputStatus = 'PENDING' | 'COMPLETED' | 'FAILED';
-
 export interface AIOutput {
   id: string;
-  type: AIOutputType;
-  aiOutputStatus: AIOutputStatus;
-  createdAt: number;
-  updatedAt: number;
-  prompt?: string;
-  title?: string;
-  content?: string;
   meetingId: string;
-  askedBy?: User;
+  prompt?: string;
+  promptTitle?: string;
+  contentType?: string;
+  content?: string;
+  isSystemPrompt?: boolean;
+  requestedAt?: number;
+  generatedAt?: number;
+  askedByName?: string;
+  askedByPhoto?: string;
 }
 
 // -----------------------------------------------------------------------------

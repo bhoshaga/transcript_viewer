@@ -47,12 +47,10 @@ export const LIST_MEETINGS = `
 
 export const GET_MEETING = `
   query GetMeeting($meetingId: ID!) {
-    meeting(meetingId: $meetingId) {
+    meeting(id: $meetingId) {
       id
       title
       platform
-      createdAt
-      updatedAt
       participants {
         name
         analytics { textLength }
@@ -65,26 +63,16 @@ export const GET_MEETING = `
 
 export const GET_MEETING_WITH_TRANSCRIPT = `
   query meetingWithTranscript($meetingId: ID!) {
-    meeting(meetingId: $meetingId) {
+    meeting(id: $meetingId) {
       id
       title
       platform
-      createdAt
-      updatedAt
-      participants {
-        name
-        analytics { textLength }
-      }
       transcript {
         id
         blocks {
-          messageId
           speakerName
           transcript
           timestamp
-          tags
-          isPinned
-          isDeleted
         }
       }
     }
@@ -96,7 +84,7 @@ export const GET_MEETING_WITH_TRANSCRIPT = `
 // -----------------------------------------------------------------------------
 
 export const LIST_TASKS = `
-  query ListTasks($input: ListTasksInput!) {
+  query ListTasks($input: TasksInput!) {
     tasks(input: $input) {
       tasks {
         id
@@ -107,7 +95,7 @@ export const LIST_TASKS = `
         createdAt
         updatedAt
         completed
-        dueTime { date }
+        dueTime
         createdBy { uid displayName photoURL }
         assignedTo { uid displayName photoURL }
         meetingId
@@ -180,15 +168,16 @@ export const GET_AI_RUNS = `
       id
       items {
         id
-        type
-        aiOutputStatus
-        createdAt
-        updatedAt
-        prompt
-        title
-        content
         meetingId
-        askedBy { uid displayName }
+        prompt
+        promptTitle
+        contentType
+        content
+        isSystemPrompt
+        requestedAt
+        generatedAt
+        askedByName
+        askedByPhoto
       }
       hasMore
       totalCount
@@ -224,11 +213,18 @@ export const SEARCH_TRANSCRIPTS = `
 
 export const GET_LABELS = `
   query getLabels {
-    labels {
-      id
-      name
-      color
-      createdAt
+    user {
+      labels {
+        id
+        name
+        description
+        style {
+          color
+          line
+          variant
+        }
+        filters
+      }
     }
   }
 `;
@@ -239,7 +235,7 @@ export const GET_LABELS = `
 
 export const GET_QUICK_PROMPTS = `
   query GetQuickPrompts {
-    quickPrompts {
+    getQuickPrompts {
       system {
         id
         name

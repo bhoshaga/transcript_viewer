@@ -76,7 +76,7 @@ Authorization: Bearer <token>
 
 ```graphql
 query GetMeeting($meetingId: ID!) {
-  meeting(meetingId: $meetingId) {
+  meeting(id: $meetingId) {
     id
     title
     platform
@@ -125,9 +125,11 @@ query GetMeeting($meetingId: ID!) {
 
 ## Get Meeting with Transcript
 
+Uses the same `meeting(id:)` resolver as GetMeeting. Transcript is included when requested.
+
 ```graphql
 query meetingWithTranscript($meetingId: ID!) {
-  meeting(meetingId: $meetingId) {
+  meeting(id: $meetingId) {
     id
     title
     platform
@@ -150,6 +152,14 @@ query meetingWithTranscript($meetingId: ID!) {
 **Variables**:
 ```json
 { "meetingId": "a5ea703731bb38fe443a" }
+```
+
+**Debug with curl**:
+```bash
+curl -s -X POST http://127.0.0.1:8000/api/2/graphql \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -d '{"operationName":"meetingWithTranscript","variables":{"meetingId":"MEETING_ID"},"query":"query meetingWithTranscript($meetingId: ID!) { meeting(id: $meetingId) { id title transcript { id blocks { speakerName transcript timestamp } } } }"}'
 ```
 
 **Response**:
@@ -228,15 +238,23 @@ query ListMeetings(
   "type": "MyMeetings",
   "spaceId": null,
   "offset": 0,
-  "filter": {},
+  "filter": { "query": null },
   "sortBy": "CREATED_NEWEST_FIRST",
   "includeAiOutputs": true
 }
 ```
 
-**Type Values**:
+**Enums**:
+
+`MeetingType`:
 - `MyMeetings` - User's own meetings
 - `SharedWithMe` - Meetings shared with user
+
+`SortBy`:
+- `CREATED_NEWEST_FIRST`
+- `CREATED_OLDEST_FIRST`
+- `MODIFIED_NEWEST_FIRST`
+- `MODIFIED_OLDEST_FIRST`
 
 **Response**:
 ```json
@@ -478,7 +496,7 @@ mutation RemoveShare($input: RemoveShareInput!) {
 ## List Tasks for Meeting
 
 ```graphql
-query ListTasks($input: ListTasksInput!) {
+query ListTasks($input: TasksInput!) {
   tasks(input: $input) {
     tasks {
       id
@@ -805,15 +823,16 @@ query GetAIRuns($input: GetAIRunsInput!) {
     id
     items {
       id
-      type
-      aiOutputStatus
-      createdAt
-      updatedAt
-      prompt
-      title
-      content
       meetingId
-      askedBy { uid displayName }
+      prompt
+      promptTitle
+      contentType
+      content
+      isSystemPrompt
+      requestedAt
+      generatedAt
+      askedByName
+      askedByPhoto
     }
     hasMore
     totalCount
@@ -826,8 +845,7 @@ query GetAIRuns($input: GetAIRunsInput!) {
 {
   "input": {
     "meetingId": "a5ea703731bb38fe443a",
-    "limit": 50,
-    "offset": 0
+    "limit": 50
   }
 }
 ```
@@ -839,7 +857,7 @@ query GetAIRuns($input: GetAIRunsInput!) {
 ## Search Transcripts
 
 ```graphql
-query SearchTranscripts($input: SearchTranscriptsInput!) {
+query SearchTranscripts($input: SearchInput!) {
   searchTranscripts(input: $input) {
     results {
       id
@@ -899,11 +917,18 @@ query SearchTranscripts($input: SearchTranscriptsInput!) {
 
 ```graphql
 query getLabels {
-  labels {
-    id
-    name
-    color
-    createdAt
+  user {
+    labels {
+      id
+      name
+      description
+      style {
+        color
+        line
+        variant
+      }
+      filters
+    }
   }
 }
 ```
@@ -912,14 +937,21 @@ query getLabels {
 ```json
 {
   "data": {
-    "labels": [
-      {
-        "id": "label_1",
-        "name": "Important",
-        "color": "#FF0000",
-        "createdAt": 1765848765845
-      }
-    ]
+    "user": {
+      "labels": [
+        {
+          "id": "label_1",
+          "name": "Important",
+          "description": "Important meetings",
+          "style": {
+            "color": "RED",
+            "line": "SOLID",
+            "variant": "OUTLINED"
+          },
+          "filters": null
+        }
+      ]
+    }
   }
 }
 ```
@@ -990,6 +1022,85 @@ subscription userUpdates {
     displayName
     settings { ... }
     aiCredits { remaining isUnlimited }
+  }
+}
+```
+
+---
+
+# Other Endpoints
+
+## Related Meetings
+
+```graphql
+query RelatedMeetings($meetingId: ID!) {
+  relatedMeetings(meetingId: $meetingId) {
+    id
+    title
+    platform
+    created
+  }
+}
+```
+
+**Variables**:
+```json
+{ "meetingId": "a5ea703731bb38fe443a" }
+```
+
+**Response**: Returns `[]` (not implemented yet)
+
+---
+
+## Track Meeting View
+
+```graphql
+mutation TrackMeetingView($id: ID!) {
+  trackMeetingView(meetingId: $id) {
+    success
+  }
+}
+```
+
+**Variables**:
+```json
+{ "id": "a5ea703731bb38fe443a" }
+```
+
+---
+
+## Get Workflows Requiring Attention
+
+```graphql
+query GetWorkflowsRequiringAttention {
+  workflowsRequiringAttention {
+    workflowId
+    workflowName
+    integration
+    errorMessage
+    failedAt
+    executionId
+  }
+}
+```
+
+**Response**: Returns `[]` (no workflow errors)
+
+---
+
+## Get Domain Users Count
+
+```graphql
+query getDomainUsersCount {
+  getDomainUsersCount
+}
+```
+
+**Response**:
+```json
+{
+  "data": {
+    "getDomainUsersCount": 0
   }
 }
 ```
@@ -1073,7 +1184,7 @@ query MeetingSearchFacets {
 
 ```graphql
 query GetQuickPrompts {
-  quickPrompts {
+  getQuickPrompts {
     system {
       id
       name
@@ -1100,7 +1211,7 @@ query GetQuickPrompts {
 ```json
 {
   "data": {
-    "quickPrompts": {
+    "getQuickPrompts": {
       "system": {
         "id": "system-prompts",
         "name": "General",
@@ -1153,14 +1264,14 @@ async function fetchMeeting(meetingId: string, token: string) {
     },
     body: JSON.stringify({
       query: `
-        query GetMeeting($id: ID!) {
-          meeting(id: $id) {
+        query GetMeeting($meetingId: ID!) {
+          meeting(id: $meetingId) {
             id title platform createdAt
             transcript { blocks { speakerName transcript timestamp } }
           }
         }
       `,
-      variables: { id: meetingId },
+      variables: { meetingId: meetingId },
       operationName: 'GetMeeting'
     })
   });

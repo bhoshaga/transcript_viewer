@@ -1,14 +1,12 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
-import { ScrollArea } from "../../components/ui/scroll-area";
 import { ArrowUpCircle, Loader2, Plus, Minimize } from "lucide-react";
 import { useLocation, useParams } from "react-router-dom";
 import { useAI } from "../../lib/AIContext";
 import { useTranscript } from "../../lib/TranscriptContext";
 import { getContextualSuggestions } from "../../services/aiService";
 import Markdown from 'markdown-to-jsx';
-import * as ScrollAreaPrimitive from "@radix-ui/react-scroll-area";
 import { cn } from "../../lib/utils";
 
 // Local Message type for transcript data
@@ -105,27 +103,18 @@ interface RightSidebarProps {
   onClose?: () => void;
 }
 
-// Add a ScrollArea component with hidden scrollbar but preserved functionality
+// Simple scroll container with hidden scrollbar
 const ScrollAreaHiddenBar = React.forwardRef<
-  React.ElementRef<typeof ScrollAreaPrimitive.Root>,
-  React.ComponentPropsWithoutRef<typeof ScrollAreaPrimitive.Root>
+  HTMLDivElement,
+  React.HTMLAttributes<HTMLDivElement>
 >(({ className, children, ...props }, ref) => (
-  <ScrollAreaPrimitive.Root
+  <div
     ref={ref}
-    className={cn("relative overflow-hidden", className)}
+    className={cn("relative overflow-y-auto scrollbar-hide", className)}
     {...props}
   >
-    <ScrollAreaPrimitive.Viewport className="h-full w-full rounded-[inherit]">
-      {children}
-    </ScrollAreaPrimitive.Viewport>
-    <ScrollAreaPrimitive.ScrollAreaScrollbar
-      orientation="vertical"
-      className="invisible-scrollbar flex touch-none select-none transition-colors h-full w-2.5 border-l border-l-transparent p-[1px]"
-    >
-      <ScrollAreaPrimitive.ScrollAreaThumb className="relative flex-1 rounded-full bg-transparent" />
-    </ScrollAreaPrimitive.ScrollAreaScrollbar>
-    <ScrollAreaPrimitive.Corner />
-  </ScrollAreaPrimitive.Root>
+    {children}
+  </div>
 ));
 ScrollAreaHiddenBar.displayName = "ScrollAreaHiddenBar";
 
@@ -418,14 +407,12 @@ const RightSidebar = ({ onClose }: RightSidebarProps) => {
 
   // Update context when meeting name changes
   useEffect(() => {
-    if (currentMeetingName) {
-      // Only update if we're in detail view and already have a context
-      if (isDetailView && currentContext.page === 'transcript-detail') {
-        const newContext = getCurrentContext();
-        setCurrentContext(newContext);
-      }
+    if (currentMeetingName && isDetailView) {
+      const newContext = getCurrentContext();
+      setCurrentContext(newContext);
     }
-  }, [currentMeetingName, isDetailView, getCurrentContext, currentContext]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentMeetingName, isDetailView]);
 
   // Auto-scroll to bottom when messages update or when isProcessing changes
   useEffect(() => {
@@ -512,7 +499,7 @@ const RightSidebar = ({ onClose }: RightSidebarProps) => {
       </div>
       
       {/* Main chat area */}
-      <ScrollArea className="flex-1 px-2 py-3 no-scrollbar" ref={scrollAreaRef}>
+      <div className="flex-1 px-2 py-3 overflow-y-auto" ref={scrollAreaRef}>
         <div className="space-y-6">
           {aiMessages.length > 0 ? (
             aiMessages.map((message) => (
@@ -702,8 +689,8 @@ const RightSidebar = ({ onClose }: RightSidebarProps) => {
           {/* Invisible element to scroll to */}
           <div ref={messagesEndRef} />
         </div>
-      </ScrollArea>
-      
+      </div>
+
       <div className="p-2 border-t border-border">
         <div className="flex space-x-2">
           <Input
