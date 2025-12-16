@@ -2,6 +2,7 @@ import React, { useEffect } from "react";
 import { BrowserRouter, useRoutes, Navigate } from "react-router-dom";
 import Transcript from "./pages/Transcript";
 import Login from "./pages/Login";
+import SharedMeeting from "./pages/SharedMeeting";
 import "./App.css";
 import MainLayout from "./layout/MainLayout";
 import { ToastProvider } from "./components/ui/toast";
@@ -39,6 +40,11 @@ function AppRoutes() {
     {
       path: "/login",
       element: <Login />,
+    },
+    {
+      // Public shared meeting route - no auth required
+      path: "/s/:shareKey",
+      element: <SharedMeeting />,
     },
     {
       element: (
