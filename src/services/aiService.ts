@@ -52,6 +52,20 @@ export const processUserMessage = async (
 
     const unsubscribe = await subscribeToAgentRun(agentRunId, {
       onUpdate: (agentRun: AgentRun) => {
+        // Guard against null/undefined agentRun (backend may send ack messages first)
+        if (!agentRun) {
+          console.log('[aiService] Waiting for agentRun data...');
+          return;
+        }
+
+        console.log('[aiService] Agent update - status:', agentRun.status);
+
+        // Guard against missing conversationHistory
+        if (!agentRun.conversationHistory) {
+          console.warn('[aiService] AgentRun missing conversationHistory:', agentRun);
+          return;
+        }
+
         // Find the latest assistant message
         const assistantMessages = agentRun.conversationHistory.filter(
           msg => msg.role === 'assistant'
@@ -59,20 +73,23 @@ export const processUserMessage = async (
 
         if (assistantMessages.length > 0) {
           const latestMessage = assistantMessages[assistantMessages.length - 1];
-          const content = latestMessage.content;
+          const content = latestMessage.content || '';
 
           // Only emit new content
           if (content.length > lastContentLength) {
             const newContent = content.substring(lastContentLength);
+            console.log('[aiService] New content chunk:', newContent.substring(0, 50) + '...');
             onChunk(newContent);
             lastContentLength = content.length;
             fullResponse = content;
           }
 
-          // Check if the agent run is complete
-          if (agentRun.status === 'COMPLETED' || agentRun.status === 'FAILED') {
+          // Check if response is complete - quickReplies being populated signals final update
+          const quickReplies = (latestMessage as any).quickReplies;
+          const hasQuickReplies = quickReplies && quickReplies.length > 0;
+          if (agentRun.status === 'COMPLETED' && hasQuickReplies) {
+            console.log('[aiService] Response complete with quickReplies, finishing');
             onComplete(fullResponse);
-            unsubscribe();
           }
         }
       },
@@ -82,10 +99,9 @@ export const processUserMessage = async (
         onComplete('Sorry, there was an error processing your request.');
       },
       onComplete: () => {
-        console.log('[aiService] Agent subscription complete');
-        if (fullResponse) {
-          onComplete(fullResponse);
-        }
+        // This is called when the GraphQL subscription actually completes
+        console.log('[aiService] Agent subscription complete - final response length:', fullResponse.length);
+        onComplete(fullResponse || 'Request completed.');
       }
     });
 

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
-import { ArrowUpCircle, Loader2, Plus, Minimize } from "lucide-react";
+import { ArrowUpCircle, Loader2, Plus } from "lucide-react";
 import { useLocation, useParams } from "react-router-dom";
 import { useAI } from "../../lib/AIContext";
 import { useTranscript } from "../../lib/TranscriptContext";
@@ -99,9 +99,7 @@ const getRandomGreeting = (day: string, username: string) => {
 };
 
 // Add props type for the component
-interface RightSidebarProps {
-  onClose?: () => void;
-}
+interface RightSidebarProps {}
 
 // Simple scroll container with hidden scrollbar
 const ScrollAreaHiddenBar = React.forwardRef<
@@ -118,7 +116,7 @@ const ScrollAreaHiddenBar = React.forwardRef<
 ));
 ScrollAreaHiddenBar.displayName = "ScrollAreaHiddenBar";
 
-const RightSidebar = ({ onClose }: RightSidebarProps) => {
+const RightSidebar = ({}: RightSidebarProps) => {
   const [input, setInput] = useState("");
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const { messages: aiMessages, addUserMessage, clearMessages, isProcessing, resetChatIfTooLong } = useAI();
@@ -467,46 +465,29 @@ const RightSidebar = ({ onClose }: RightSidebarProps) => {
   };
 
   return (
-    <div className="h-full flex flex-col bg-card">
-      {/* Header with New Chat and Close buttons */}
-      <div className="py-1 px-2 border-b border-border flex items-center justify-between">
-        <Button 
-          variant="ghost" 
-          className="text-xs flex items-center px-2 py-1 h-6 text-muted-foreground hover:text-foreground"
-          onClick={handleNewChat}
-        >
-          <Plus className="h-3 w-3 mr-1" />
-          New
-        </Button>
-        
-        {/* Centered message count */}
-        <div className="flex-1 text-center">
-          {currentContext.page === 'transcript-detail' && (currentContext as TranscriptDetailContext).transcriptData && (
-            <span className="text-xs text-muted-foreground">
-              {(currentContext as TranscriptDetailContext).transcriptData?.length || 0} messages
-            </span>
-          )}
-        </div>
-        
-        {/* Close button */}
+    <div className="h-full flex flex-col">
+      {/* Toolbar */}
+      <div className="py-2 px-4 border-b border-border flex items-center justify-between">
+        <span className="text-sm font-medium">Ask Questions</span>
         <Button
           variant="ghost"
-          className="text-xs flex items-center px-2 py-1 h-6 text-muted-foreground hover:text-foreground"
-          onClick={onClose}
+          className="text-sm flex items-center px-2 py-1 h-7 text-muted-foreground hover:text-foreground"
+          onClick={handleNewChat}
         >
-          <Minimize className="h-3 w-3" />
+          <Plus className="h-3.5 w-3.5 mr-1" />
+          New
         </Button>
       </div>
       
       {/* Main chat area */}
-      <div className="flex-1 px-2 py-3 overflow-y-auto" ref={scrollAreaRef}>
-        <div className="space-y-6">
+      <div className="flex-1 px-4 py-3 overflow-y-auto" ref={scrollAreaRef}>
+        <div className="flex flex-col min-h-full space-y-6">
           {aiMessages.length > 0 ? (
             aiMessages.map((message) => (
               <div
                 key={message.id}
                 className={`group ${
-                  message.isUser ? "border-l-2 border-primary" : "border-l-2 border-transparent"
+                  message.isUser ? "border-l-2 border-primary" : ""
                 }`}
               >
                 <div className="pl-3">
@@ -556,12 +537,12 @@ const RightSidebar = ({ onClose }: RightSidebarProps) => {
                                 },
                                 code: {
                                   props: {
-                                    className: 'bg-muted text-xs px-1 py-0.5 rounded inline-block'
+                                    className: 'bg-muted text-sm px-1 py-0.5 rounded inline-block font-mono'
                                   }
                                 },
                                 pre: {
                                   props: {
-                                    className: 'bg-muted text-xs p-2 my-2 rounded overflow-x-auto'
+                                    className: 'bg-muted text-sm p-2 my-2 rounded overflow-x-auto font-mono'
                                   }
                                 },
                                 blockquote: {
@@ -576,12 +557,12 @@ const RightSidebar = ({ onClose }: RightSidebarProps) => {
                                 },
                                 th: {
                                   props: {
-                                    className: 'px-2 py-1 text-xs font-medium text-left bg-muted/50'
+                                    className: 'px-2 py-1 text-sm font-medium text-left bg-muted/50'
                                   }
                                 },
                                 td: {
                                   props: {
-                                    className: 'px-2 py-1 text-xs border-t border-border'
+                                    className: 'px-2 py-1 text-sm border-t border-border'
                                   }
                                 }
                               }
@@ -621,12 +602,12 @@ const RightSidebar = ({ onClose }: RightSidebarProps) => {
                                 },
                                 code: {
                                   props: {
-                                    className: 'bg-muted text-xs px-1 py-0.5 rounded inline-block'
+                                    className: 'bg-muted text-sm px-1 py-0.5 rounded inline-block font-mono'
                                   }
                                 },
                                 pre: {
                                   props: {
-                                    className: 'bg-muted text-xs p-2 my-2 rounded overflow-x-auto'
+                                    className: 'bg-muted text-sm p-2 my-2 rounded overflow-x-auto font-mono'
                                   }
                                 },
                                 blockquote: {
@@ -641,12 +622,12 @@ const RightSidebar = ({ onClose }: RightSidebarProps) => {
                                 },
                                 th: {
                                   props: {
-                                    className: 'px-2 py-1 text-xs font-medium text-left bg-muted/50'
+                                    className: 'px-2 py-1 text-sm font-medium text-left bg-muted/50'
                                   }
                                 },
                                 td: {
                                   props: {
-                                    className: 'px-2 py-1 text-xs border-t border-border'
+                                    className: 'px-2 py-1 text-sm border-t border-border'
                                   }
                                 }
                               }
@@ -669,15 +650,12 @@ const RightSidebar = ({ onClose }: RightSidebarProps) => {
           
           {/* Show suggestions if there are no messages or only the welcome message */}
           {aiMessages.length <= 1 && suggestions.length > 0 && (
-            <div className="mt-6 space-y-2">
-              <p className="text-xs text-muted-foreground mb-2">
-                {currentContext.page === 'transcript-detail' ? "Ask about this meeting:" : "You can ask:"}
-              </p>
-              {suggestions.map((suggestion, index) => (
+            <div className="mt-auto pt-6 space-y-2 overflow-hidden">
+              {suggestions.slice(0, 3).map((suggestion, index) => (
                 <Button
                   key={index}
-                  variant="outline"
-                  className="w-full justify-start text-left text-xs h-auto py-2"
+                  variant="secondary"
+                  className="w-full justify-start text-left text-sm h-auto py-3 px-3 whitespace-normal break-words shadow-sm"
                   onClick={() => handleSuggestionClick(suggestion)}
                 >
                   {suggestion}
@@ -691,20 +669,20 @@ const RightSidebar = ({ onClose }: RightSidebarProps) => {
         </div>
       </div>
 
-      <div className="p-2 border-t border-border">
-        <div className="flex space-x-2">
+      <div className="p-4 border-t border-border">
+        <div className="relative">
           <Input
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyPress}
             placeholder={createPlaceholder()}
-            className="flex-1 text-sm h-9 bg-background"
+            className="w-full text-sm h-10 pr-10 rounded-lg bg-secondary/50 focus:ring-0 focus:outline-none focus-visible:ring-0 !border-0"
             disabled={isProcessing}
           />
-          <Button 
-            onClick={handleSendMessage} 
-            size="sm"
-            className="h-9 w-9 p-0 rounded-full"
+          <Button
+            onClick={handleSendMessage}
+            size="icon"
+            className="absolute right-1 top-1/2 -translate-y-1/2 h-8 w-8 rounded-md"
             disabled={isProcessing || !input.trim()}
           >
             {isProcessing ? (

@@ -1,53 +1,18 @@
-import React, { useState } from "react";
+import React from "react";
 import RightSidebar from "./RightSidebar";
 import { Outlet } from "react-router-dom";
 import { Button } from "../components/ui/button";
+import { Card } from "../components/ui/card";
 import { UserMenu } from "../components/UserMenu";
-import { ChevronRight, Minimize } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 import { useBreadcrumb } from "../lib/BreadcrumbContext";
 
-// Add some CSS to ensure the toggle button is properly positioned
-if (typeof document !== 'undefined') {
-  const styleId = 'main-layout-styles';
-  if (!document.getElementById(styleId)) {
-    const style = document.createElement('style');
-    style.id = styleId;
-    style.textContent = `
-      /* Position for the toggle button */
-      .sidebar-toggle-button {
-        position: fixed;
-        top: 4.55rem; /* Adjusted position to account for header height */
-        right: 6px; /* Move more significantly left from the edge */
-        width: 1.75rem;
-        height: 1.5rem;
-        z-index: 50;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        border-top-left-radius: 0.25rem;
-        border-bottom-left-radius: 0.25rem;
-        border-right: none;
-        background-color: var(--background);
-        border: 1px solid var(--border);
-        border-right: none;
-        padding: 0;
-        margin-right: 4px;
-      }
-    `;
-    document.head.appendChild(style);
-  }
-}
 
 const MainLayout = () => {
   const { navigateToMeetingList } = useBreadcrumb();
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
   const handleBackToMeetingList = () => {
     navigateToMeetingList();
-  };
-
-  const toggleSidebar = () => {
-    setIsSidebarOpen(!isSidebarOpen);
   };
 
   return (
@@ -86,30 +51,18 @@ const MainLayout = () => {
         </div>
       </nav>
       
-      {/* Fixed position toggle button that appears when sidebar is closed */}
-      {!isSidebarOpen && (
-        <Button
-          onClick={toggleSidebar}
-          variant="ghost"
-          className="sidebar-toggle-button"
-          aria-label="Open Chat"
-        >
-          <Minimize className="h-3 w-3" />
-        </Button>
-      )}
-      
       <div className="flex flex-1 overflow-hidden">
-        {/* Main content - now takes up more space without left sidebar */}
-        <div className={`main-content flex-1 p-4 overflow-auto ${!isSidebarOpen ? 'relative' : ''}`}>
-          <Outlet /> {/* This is where nested routes will be rendered */}
+        {/* Main content */}
+        <div className="main-content flex-1 pl-5 pr-1.5 pb-4 pt-4 overflow-auto">
+          <Outlet />
         </div>
-        
-        {/* Right sidebar with toggle functionality - ensure the class name is exactly right-sidebar */}
-        {isSidebarOpen && (
-          <div className="right-sidebar w-full md:w-1/4 max-w-xs flex-shrink-0 overflow-hidden border-l border-border">
-            <RightSidebar onClose={toggleSidebar} />
-          </div>
-        )}
+
+        {/* Right sidebar - always visible */}
+        <div className="right-sidebar w-full md:w-[30%] max-w-sm flex-shrink-0 overflow-hidden pt-4 pr-5 pb-4">
+          <Card className="h-full flex flex-col overflow-hidden">
+            <RightSidebar />
+          </Card>
+        </div>
       </div>
     </div>
   );

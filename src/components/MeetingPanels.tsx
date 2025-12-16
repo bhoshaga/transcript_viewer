@@ -38,70 +38,66 @@ export function ActionItems({
   onSetEditing
 }: ActionItemsProps) {
   return (
-    <Card className="flex flex-col flex-1 overflow-hidden">
-      <CardHeader className="flex-shrink-0">
-        <div className="flex items-center justify-between">
-          <CardTitle>Action Items</CardTitle>
-        </div>
+    <Card className="flex flex-col flex-1 overflow-hidden h-full ">
+      <CardHeader className="flex-shrink-0 py-4 px-6  min-h-[82px] flex flex-col justify-center">
+        <CardTitle>Action Items</CardTitle>
       </CardHeader>
-      <CardContent className="flex-1 flex flex-col p-0">
-        <div className="p-4 space-y-4 flex flex-col h-full">
-          <div className="flex space-x-2 items-center flex-shrink-0">
-            <Input
-              placeholder="Add new action item..."
-              value={newItem}
-              onChange={(e) => onNewItemChange(e.target.value)}
-              onKeyPress={(e) => e.key === 'Enter' && onAddItem()}
-              className="flex-1 focus:ring-0 focus:outline-none focus:border-transparent"
-            />
-            <Button 
-              onClick={onAddItem} 
-              size="icon" 
-              className="rounded-full shrink-0"
-            >
-              <Plus className="h-4 w-4" />
-            </Button>
-          </div>
-          <div className="flex-1 overflow-y-auto">
-            <div className="space-y-2">
-              {items.map((item) => (
-                <div
-                  key={item.id}
-                  className="group flex items-start space-x-2 p-3 rounded-md bg-secondary/50 hover:bg-secondary"
-                >
-                  {item.isEditing ? (
-                    <Input
-                      defaultValue={item.content}
-                      onBlur={(e) => onEditItem(item.id, e.target.value)}
-                      autoFocus
-                      className="focus:ring-0 focus:outline-none focus:border-transparent"
-                    />
-                  ) : (
-                    <>
-                      <p 
-                        className="flex-1 leading-relaxed" 
-                        onDoubleClick={() => onSetEditing(
-                          items.map(i => i.id === item.id ? {...i, isEditing: true} : i)
-                        )}
-                      >
-                        {item.content}
-                      </p>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="opacity-0 group-hover:opacity-100 -mt-1"
-                        onClick={() => onDeleteItem(item.id)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </>
-                  )}
-                </div>
-              ))}
-            </div>
+      <div className="flex-1 overflow-y-auto px-6 pb-6 flex flex-col space-y-3 ">
+        <div className="flex space-x-2 items-center flex-shrink-0">
+          <Input
+            placeholder="Add new action item..."
+            value={newItem}
+            onChange={(e) => onNewItemChange(e.target.value)}
+            onKeyPress={(e) => e.key === 'Enter' && onAddItem()}
+            className="flex-1 focus:ring-0 focus:outline-none focus:border-transparent rounded-lg"
+          />
+          <Button
+            onClick={onAddItem}
+            size="icon"
+            className="rounded-full shrink-0 h-7 w-7"
+          >
+            <Plus className="h-3 w-3" />
+          </Button>
+        </div>
+        <div className="flex-1 overflow-y-auto">
+          <div className="space-y-2">
+            {items.map((item) => (
+              <div
+                key={item.id}
+                className="group flex items-start space-x-2 p-3 rounded-md bg-secondary/50 hover:bg-secondary"
+              >
+                {item.isEditing ? (
+                  <Input
+                    defaultValue={item.content}
+                    onBlur={(e) => onEditItem(item.id, e.target.value)}
+                    autoFocus
+                    className="focus:ring-0 focus:outline-none focus:border-transparent"
+                  />
+                ) : (
+                  <>
+                    <p
+                      className="flex-1 leading-relaxed"
+                      onDoubleClick={() => onSetEditing(
+                        items.map(i => i.id === item.id ? {...i, isEditing: true} : i)
+                      )}
+                    >
+                      {item.content}
+                    </p>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="opacity-0 group-hover:opacity-100 -mt-1"
+                      onClick={() => onDeleteItem(item.id)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </>
+                )}
+              </div>
+            ))}
           </div>
         </div>
-      </CardContent>
+      </div>
     </Card>
   );
 }
@@ -178,32 +174,28 @@ export function SpeakerStats({ stats, messages }: SpeakerStatsProps) {
   // Skip timeline processing if no messages
   if (!messages || messages.length === 0) {
     return (
-      <Card className="flex flex-col overflow-hidden">
-        <CardHeader className="flex-shrink-0">
+      <Card className="flex flex-col overflow-hidden  h-full">
+        <CardHeader className="flex-shrink-0 pb-2">
           <CardTitle>Speaker Stats</CardTitle>
         </CardHeader>
-        <CardContent className="p-0">
-          <div className="p-4 max-h-[40vh] overflow-y-auto">
-            <div className="space-y-4">
-              {speakerPercentages.map(({ speaker, percentage }) => (
-                <div key={speaker} className="space-y-1">
-                  <div className="flex justify-between text-sm">
-                    <span>{speaker}</span>
-                    <span className="text-muted-foreground">
-                      {percentage}%
-                    </span>
-                  </div>
-                  <div className="h-2.5 bg-secondary rounded-full overflow-hidden">
-                    <div
-                      className={`h-full rounded-full transition-all duration-300 ${getPastelColor(speaker)}`}
-                      style={{ width: `${percentage}%` }}
-                    />
-                  </div>
+        <div className="flex-1 overflow-y-auto px-6 pb-6">
+          <div className="space-y-3">
+            {speakerPercentages.map(({ speaker, percentage }) => (
+              <div key={speaker} className="space-y-1">
+                <div className="flex justify-between text-sm">
+                  <span>{speaker}</span>
+                  <span className="text-muted-foreground">{percentage}%</span>
                 </div>
-              ))}
-            </div>
+                <div className="h-2.5 bg-secondary rounded-full overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all duration-300 ${getPastelColor(speaker)}`}
+                    style={{ width: `${percentage}%` }}
+                  />
+                </div>
+              </div>
+            ))}
           </div>
-        </CardContent>
+        </div>
       </Card>
     );
   }
@@ -214,33 +206,29 @@ export function SpeakerStats({ stats, messages }: SpeakerStatsProps) {
   
   if (messagesWithTime.length === 0) {
     return (
-      <Card className="flex flex-col overflow-hidden">
-        <CardHeader className="flex-shrink-0">
+      <Card className="flex flex-col overflow-hidden  h-full">
+        <CardHeader className="flex-shrink-0 pb-2">
           <CardTitle>Speaker Stats</CardTitle>
         </CardHeader>
-        <CardContent className="p-0">
-          <div className="p-4 max-h-[40vh] overflow-y-auto">
-            <div className="space-y-4">
-              {speakerPercentages.map(({ speaker, percentage }) => (
-                <div key={speaker} className="space-y-1">
-                  <div className="flex justify-between text-sm">
-                    <span>{speaker}</span>
-                    <span className="text-muted-foreground">
-                      {percentage}%
-                    </span>
-                  </div>
-                  <div className="h-2.5 bg-secondary rounded-full overflow-hidden">
-                    <div
-                      className={`h-full rounded-full transition-all duration-300 ${getPastelColor(speaker)}`}
-                      style={{ width: `${percentage}%` }}
-                    />
-                  </div>
+        <div className="flex-1 overflow-y-auto px-6 pb-6">
+          <div className="space-y-3">
+            {speakerPercentages.map(({ speaker, percentage }) => (
+              <div key={speaker} className="space-y-1">
+                <div className="flex justify-between text-sm">
+                  <span>{speaker}</span>
+                  <span className="text-muted-foreground">{percentage}%</span>
                 </div>
-              ))}
-              <div className="text-xs text-muted-foreground mt-2">Time data not available</div>
-            </div>
+                <div className="h-2.5 bg-secondary rounded-full overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all duration-300 ${getPastelColor(speaker)}`}
+                    style={{ width: `${percentage}%` }}
+                  />
+                </div>
+              </div>
+            ))}
+            <div className="text-xs text-muted-foreground">Time data not available</div>
           </div>
-        </CardContent>
+        </div>
       </Card>
     );
   }
@@ -268,33 +256,29 @@ export function SpeakerStats({ stats, messages }: SpeakerStatsProps) {
   if (meetingDuration <= 0) {
     console.log("Invalid meeting duration detected");
     return (
-      <Card className="flex flex-col overflow-hidden">
-        <CardHeader className="flex-shrink-0">
+      <Card className="flex flex-col overflow-hidden  h-full">
+        <CardHeader className="flex-shrink-0 pb-2">
           <CardTitle>Speaker Stats</CardTitle>
         </CardHeader>
-        <CardContent className="p-0">
-          <div className="p-4 max-h-[40vh] overflow-y-auto">
-            <div className="space-y-4">
-              {speakerPercentages.map(({ speaker, percentage }) => (
-                <div key={speaker} className="space-y-1">
-                  <div className="flex justify-between text-sm">
-                    <span>{speaker}</span>
-                    <span className="text-muted-foreground">
-                      {percentage}%
-                    </span>
-                  </div>
-                  <div className="h-2.5 bg-secondary rounded-full overflow-hidden">
-                    <div
-                      className={`h-full rounded-full transition-all duration-300 ${getPastelColor(speaker)}`}
-                      style={{ width: `${percentage}%` }}
-                    />
-                  </div>
+        <div className="flex-1 overflow-y-auto px-6 pb-6">
+          <div className="space-y-3">
+            {speakerPercentages.map(({ speaker, percentage }) => (
+              <div key={speaker} className="space-y-1">
+                <div className="flex justify-between text-sm">
+                  <span>{speaker}</span>
+                  <span className="text-muted-foreground">{percentage}%</span>
                 </div>
-              ))}
-              <div className="text-xs text-muted-foreground mt-2">Unable to determine meeting duration</div>
-            </div>
+                <div className="h-2.5 bg-secondary rounded-full overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all duration-300 ${getPastelColor(speaker)}`}
+                    style={{ width: `${percentage}%` }}
+                  />
+                </div>
+              </div>
+            ))}
+            <div className="text-xs text-muted-foreground">Unable to determine meeting duration</div>
           </div>
-        </CardContent>
+        </div>
       </Card>
     );
   }
@@ -338,52 +322,43 @@ export function SpeakerStats({ stats, messages }: SpeakerStatsProps) {
   }));
 
   return (
-    <Card className="flex flex-col overflow-hidden">
-      <CardHeader className="flex-shrink-0">
+    <Card className="flex flex-col overflow-hidden  h-full">
+      <CardHeader className="flex-shrink-0 pb-2">
         <CardTitle>Speaker Stats</CardTitle>
       </CardHeader>
-      <CardContent className="p-0">
-        <div className="p-4 max-h-[40vh] overflow-y-auto">
-          <div className="space-y-4">
-            {speakerPercentages.map(({ speaker, percentage }) => {
-              // Get consistent pastel color for this speaker
-              const speakerColor = getPastelColor(speaker);
-              
-              return (
-                <div key={speaker} className="space-y-1">
-                  <div className="flex justify-between text-sm">
-                    <span>{speaker}</span>
-                    <span className="text-muted-foreground">
-                      {percentage}%
-                    </span>
-                  </div>
-                  <div className="h-2.5 bg-secondary rounded-full overflow-hidden relative">
-                    {/* Each message is represented as a small fixed-width marker */}
-                    {speakerMarkers[speaker]?.map((marker, idx) => {
-                      const positionPercent = ((marker.time - startTime) / meetingDuration) * 100;
-                      // Set width to represent approximately 4 seconds or a minimum width
-                      const widthPercent = Math.max((SPEECH_DURATION / meetingDuration) * 100, 0.5);
-                      
-                      return (
-                        <div
-                          key={idx}
-                          className={`absolute top-0 h-full ${speakerColor}`}
-                          style={{
-                            left: `${positionPercent}%`,
-                            width: `${widthPercent}%`,
-                            zIndex: 10
-                          }}
-                          title={`${speaker}: ${formatTime(marker.time)} - "${marker.content.substring(0, 30)}${marker.content.length > 30 ? '...' : ''}"`}
-                        />
-                      );
-                    })}
-                  </div>
+      <div className="flex-1 overflow-y-auto px-6 pb-6">
+        <div className="space-y-3">
+          {speakerPercentages.map(({ speaker, percentage }) => {
+            const speakerColor = getPastelColor(speaker);
+            return (
+              <div key={speaker} className="space-y-1">
+                <div className="flex justify-between text-sm">
+                  <span>{speaker}</span>
+                  <span className="text-muted-foreground">{percentage}%</span>
                 </div>
-              );
-            })}
-          </div>
+                <div className="h-2.5 bg-secondary rounded-full overflow-hidden relative">
+                  {speakerMarkers[speaker]?.map((marker, idx) => {
+                    const positionPercent = ((marker.time - startTime) / meetingDuration) * 100;
+                    const widthPercent = Math.max((SPEECH_DURATION / meetingDuration) * 100, 0.5);
+                    return (
+                      <div
+                        key={idx}
+                        className={`absolute top-0 h-full ${speakerColor}`}
+                        style={{
+                          left: `${positionPercent}%`,
+                          width: `${widthPercent}%`,
+                          zIndex: 10
+                        }}
+                        title={`${speaker}: ${formatTime(marker.time)} - "${marker.content.substring(0, 30)}${marker.content.length > 30 ? '...' : ''}"`}
+                      />
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
         </div>
-      </CardContent>
+      </div>
     </Card>
   );
 }

@@ -2,7 +2,6 @@ import React, { useState, useEffect, useCallback, useRef } from "react";
 import { Button } from "../components/ui/button";
 import {
   Card,
-  CardContent,
   CardHeader,
   CardTitle,
 } from "../components/ui/card";
@@ -14,7 +13,6 @@ import {
 } from "../components/ui/popover";
 import { Avatar, AvatarFallback } from "../components/ui/avatar";
 import {
-  Clock,
   Users,
   Search,
   FileText,
@@ -22,18 +20,49 @@ import {
   X,
   ChevronDown,
   ChevronUp,
+  Mail,
+  Link,
+  Pencil,
+  Copy,
 } from "lucide-react";
-import { speakerColors } from "../data/meetings";
+import { getSpeakerColor } from "../data/meetings";
 import { Meeting, TranscriptBlock } from "../types";
 import { MeetingListView } from "../components/MeetingListView";
 import { MessageList } from "../components/MessageList";
-import { ActionItems, SpeakerStats } from "../components/MeetingPanels";
-import { listMeetings, getMeetingWithTranscript, archiveMeeting } from "../apis/meetings";
+// ActionItems and SpeakerStats removed - speaker stats now inline in header
+import { listMeetings, getMeetingWithTranscript, archiveMeeting, updateMeeting, generateShareLink } from "../apis/meetings";
 import { useNavigate, useLocation, useParams } from "react-router-dom";
 import { toast } from '../components/ui/toast';
 import { useBreadcrumb } from "../lib/BreadcrumbContext";
 import { useTranscript } from '../lib/TranscriptContext';
 import { getEnv } from "../lib/useEnv";
+
+// Helper function to get pastel colors for speakers
+const getPastelColor = (speaker: string): string => {
+  const pastelColors = [
+    'bg-blue-300',
+    'bg-indigo-300',
+    'bg-purple-300',
+    'bg-pink-300',
+    'bg-orange-300',
+    'bg-yellow-300',
+    'bg-teal-300',
+    'bg-cyan-300',
+    'bg-violet-300',
+    'bg-fuchsia-300',
+    'bg-rose-300',
+    'bg-amber-300',
+  ];
+  const hash = speaker.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+  return pastelColors[hash % pastelColors.length];
+};
+
+// Helper function to convert call_time ("MM:SS") to seconds
+const timeToSeconds = (time: string): number => {
+  if (!time || !time.includes(':')) return 0;
+  const [minutes, seconds] = time.split(':').map(Number);
+  return minutes * 60 + seconds;
+};
 
 // Helper function to get first name
 const getFirstName = (fullName: string): string => {
@@ -65,13 +94,6 @@ const blockToMessage = (block: TranscriptBlock, index: number) => {
   };
 };
 
-interface ActionItem {
-  id: string;
-  content: string;
-  isInferred: boolean;
-  isEditing: boolean;
-}
-
 const Transcript = () => {
   const { USER_NAME } = getEnv();
   const [selectedMeeting, setSelectedMeeting] = useState<Meeting | null>(null);
@@ -86,14 +108,14 @@ const Transcript = () => {
     setMeetingName
   } = useTranscript();
 
-  const [actionItems, setActionItems] = useState<ActionItem[]>([]);
-  const [newActionItem, setNewActionItem] = useState("");
   const [hoveredDelete, setHoveredDelete] = useState<string | null>(null);
   const [speakerStats, setSpeakerStats] = useState<Record<string, number>>({});
 
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<number[]>([]);
   const [currentSearchIndex, setCurrentSearchIndex] = useState(0);
+  const [isRenaming, setIsRenaming] = useState(false);
+  const [renameValue, setRenameValue] = useState("");
 
   const navigate = useNavigate();
   const location = useLocation();
@@ -207,18 +229,6 @@ const Transcript = () => {
     // TODO: Call updateMeeting mutation to persist pin state
   };
 
-  const addToActionItems = async (content: string, messageId: string) => {
-    const message = messages.find(msg => msg.id === messageId);
-    if (!message) return;
-
-    const tempId = crypto.randomUUID();
-    setActionItems(items => [
-      ...items,
-      { id: tempId, content, isInferred: false, isEditing: false },
-    ]);
-    // TODO: Call createTask mutation
-  };
-
   const deleteMessage = (id: string) => {
     setMessages(msgs => msgs.filter(msg => msg.id !== id));
   };
@@ -324,6 +334,37 @@ const Transcript = () => {
     setCurrentSearchIndex(0);
   };
 
+  const handleStartRename = () => {
+    if (selectedMeeting) {
+      setRenameValue(selectedMeeting.title);
+      setIsRenaming(true);
+    }
+  };
+
+  const handleRename = async () => {
+    if (!selectedMeeting || !renameValue.trim()) return;
+
+    const newTitle = renameValue.trim();
+    if (newTitle === selectedMeeting.title) {
+      setIsRenaming(false);
+      return;
+    }
+
+    try {
+      await updateMeeting(selectedMeeting.id, { title: newTitle });
+      setSelectedMeeting({ ...selectedMeeting, title: newTitle });
+      setMeetingName(newTitle);
+      if (meetings) {
+        setMeetings(meetings.map(m => m.id === selectedMeeting.id ? { ...m, title: newTitle } : m));
+      }
+      toast({ title: "Renamed", description: "Meeting title updated" });
+    } catch (error) {
+      console.error("Failed to rename meeting:", error);
+      toast({ variant: "destructive", title: "Error", description: "Failed to rename meeting" });
+    }
+    setIsRenaming(false);
+  };
+
   // Format meeting time display
   const formatMeetingTime = (meeting: Meeting) => {
     if (meeting.created) {
@@ -347,34 +388,47 @@ const Transcript = () => {
   };
 
   return (
-    <div className={selectedMeeting ? "h-full flex flex-col overflow-hidden" : "min-h-screen"}>
-      <div className={selectedMeeting ? "flex-1 overflow-hidden" : ""}>
+    <div className={selectedMeeting ? "h-full flex flex-col" : "min-h-screen"}>
+      <div className={selectedMeeting ? "flex-1 overflow-auto" : ""}>
         {selectedMeeting ? (
-          <div className="container mx-auto px-4 py-8 h-full flex flex-col overflow-hidden">
-            <div className="grid gap-8 h-full overflow-hidden">
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 h-full overflow-hidden">
-                <div className="lg:col-span-8 flex flex-col overflow-hidden h-full">
-                  <div className="min-w-0 flex flex-col overflow-hidden flex-1">
-                    <div className="relative flex-shrink-0">
-                      {!selectedMeeting.hasEnded && (
-                        <div className="absolute top-6 right-6 flex items-center space-x-2 z-10">
-                          <div className="w-3 h-3 rounded-full bg-green-500 animate-pulse" />
-                          <span className="text-xs text-muted-foreground">Live</span>
-                        </div>
-                      )}
-                      <Card className="overflow-hidden">
+          <div className="flex flex-col gap-3 pb-4">
+                {/* Meeting Header */}
+                <div className="flex-shrink-0 relative">
+                  {!selectedMeeting.hasEnded && (
+                    <div className="absolute top-6 right-6 flex items-center space-x-2 z-10">
+                      <div className="w-3 h-3 rounded-full bg-green-500 animate-pulse" />
+                      <span className="text-xs text-muted-foreground">Live</span>
+                    </div>
+                  )}
+                  <Card className="overflow-hidden h-full">
                         <CardHeader>
                           <div className="flex justify-between items-start">
                             <div>
-                              <CardTitle>{selectedMeeting.title}</CardTitle>
+                              <div className="flex items-center gap-3">
+                                {selectedMeeting.platform === 'GOOGLE_MEET' && (
+                                  <img src="/google-meet.png" alt="Google Meet" className="h-6 w-6 flex-shrink-0" />
+                                )}
+                                {isRenaming ? (
+                                  <Input
+                                    value={renameValue}
+                                    onChange={(e) => setRenameValue(e.target.value)}
+                                    onBlur={handleRename}
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') handleRename();
+                                      if (e.key === 'Escape') setIsRenaming(false);
+                                    }}
+                                    autoFocus
+                                    className="text-2xl font-semibold h-auto py-0 px-1 border-none focus:ring-0"
+                                  />
+                                ) : (
+                                  <CardTitle>{selectedMeeting.title}</CardTitle>
+                                )}
+                              </div>
                               <div className="flex items-center space-x-4 text-sm text-muted-foreground mt-2">
-                                <div className="flex items-center">
-                                  <Clock className="mr-2 h-4 w-4" />
-                                  <span>
-                                    {formatMeetingTime(selectedMeeting)}
-                                    {selectedMeeting.duration && ` (${formatDuration(selectedMeeting.duration)})`}
-                                  </span>
-                                </div>
+                                <span>
+                                  {formatMeetingTime(selectedMeeting)}
+                                  {selectedMeeting.duration && ` · ${formatDuration(selectedMeeting.duration)}`}
+                                </span>
                                 <Popover>
                                   <PopoverTrigger asChild>
                                     <Button variant="ghost" size="sm" className="flex items-center">
@@ -382,26 +436,60 @@ const Transcript = () => {
                                       <span>{selectedMeeting.participants.length} Participants</span>
                                     </Button>
                                   </PopoverTrigger>
-                                  <PopoverContent className="w-64 bg-card border-border">
-                                    <div className="space-y-2">
+                                  <PopoverContent className="w-56 bg-card border-border p-2">
+                                    <div className="space-y-1.5">
                                       {selectedMeeting.participants.map((participant, idx) => (
                                         <div key={idx} className="flex items-center space-x-2">
-                                          <Avatar className={speakerColors[participant.name] || 'bg-primary'}>
-                                            <AvatarFallback>{getFirstName(participant.name)[0]}</AvatarFallback>
+                                          <Avatar className="h-6 w-6">
+                                            <AvatarFallback className={`text-xs ${getSpeakerColor(participant.name)}`}>{getFirstName(participant.name)[0]}</AvatarFallback>
                                           </Avatar>
-                                          <span>{participant.name}</span>
+                                          <span className="text-sm">{participant.name}</span>
                                         </div>
                                       ))}
                                     </div>
                                   </PopoverContent>
                                 </Popover>
-                                <span className="text-xs px-2 py-1 bg-secondary rounded">
-                                  {selectedMeeting.platform.replace('_', ' ')}
-                                </span>
                               </div>
                             </div>
+                            {/* Right side actions */}
+                            <div className="flex items-center gap-1">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                                onClick={() => toast({ title: "Coming Soon", description: "Email feature is in development", variant: "info" })}
+                              >
+                                <Mail className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                                onClick={async () => {
+                                  try {
+                                    const result = await generateShareLink(selectedMeeting.id);
+                                    const shareUrl = `${window.location.origin}/s/${result.key}`;
+                                    navigator.clipboard.writeText(shareUrl);
+                                    toast({ title: "Link Copied", description: "Share link copied to clipboard" });
+                                  } catch (error) {
+                                    console.error("Failed to generate share link:", error);
+                                    toast({ variant: "destructive", title: "Error", description: "Failed to generate share link" });
+                                  }
+                                }}
+                              >
+                                <Link className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                                onClick={handleStartRename}
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                            </div>
                           </div>
-                          <div className="flex space-x-2 mt-4">
+                          <div className="flex space-x-2 mt-4 pb-2">
                             <Button
                               variant="secondary"
                               size="sm"
@@ -419,23 +507,115 @@ const Transcript = () => {
                               Detailed Summary
                             </Button>
                           </div>
+                          {/* Inline Speaker Stats */}
+                          {Object.keys(speakerStats).length > 0 && (() => {
+                            const totalMessages = Object.values(speakerStats).reduce((sum, c) => sum + c, 0);
+                            const speakerPercentages = Object.entries(speakerStats).map(([speaker, count]) => ({
+                              speaker,
+                              count,
+                              percentage: totalMessages > 0 ? Math.round((count / totalMessages) * 100) : 0
+                            }));
+
+                            // Get messages with time data for timeline
+                            const messagesWithTime = messages.filter(msg => msg.call_time);
+                            const sortedMessages = [...messagesWithTime].sort((a, b) =>
+                              timeToSeconds(a.call_time || "0:00") - timeToSeconds(b.call_time || "0:00")
+                            );
+
+                            const hasTimeData = sortedMessages.length > 0;
+                            const startTime = hasTimeData ? timeToSeconds(sortedMessages[0].call_time || "0:00") : 0;
+                            const endTime = hasTimeData ? timeToSeconds(sortedMessages[sortedMessages.length - 1].call_time || "0:00") : 0;
+                            const meetingDuration = endTime - startTime;
+                            const SPEECH_DURATION = 2;
+
+                            // Build speaker markers
+                            const speakerMarkers: Record<string, Array<{time: number}>> = {};
+                            Object.keys(speakerStats).forEach(speaker => {
+                              speakerMarkers[speaker] = [];
+                            });
+                            sortedMessages.forEach(message => {
+                              const time = timeToSeconds(message.call_time || "0:00");
+                              if (!speakerMarkers[message.speaker]) {
+                                speakerMarkers[message.speaker] = [];
+                              }
+                              speakerMarkers[message.speaker].push({ time });
+                            });
+
+                            return (
+                              <div className="mt-6 space-y-3">
+                                {speakerPercentages.map(({ speaker, percentage }) => {
+                                  const speakerColor = getPastelColor(speaker);
+                                  return (
+                                    <div key={speaker} className="space-y-1">
+                                      <div className="flex justify-between text-sm">
+                                        <span>{speaker}</span>
+                                        <span className="text-muted-foreground">{percentage}%</span>
+                                      </div>
+                                      <div className="h-1.5 bg-secondary rounded-full overflow-hidden relative">
+                                        {hasTimeData && meetingDuration > 0 ? (
+                                          speakerMarkers[speaker]?.map((marker, idx) => {
+                                            const positionPercent = ((marker.time - startTime) / meetingDuration) * 100;
+                                            const widthPercent = Math.max((SPEECH_DURATION / meetingDuration) * 100, 0.5);
+                                            return (
+                                              <div
+                                                key={idx}
+                                                className={`absolute top-0 h-full ${speakerColor}`}
+                                                style={{
+                                                  left: `${positionPercent}%`,
+                                                  width: `${widthPercent}%`,
+                                                  zIndex: 10
+                                                }}
+                                              />
+                                            );
+                                          })
+                                        ) : (
+                                          <div
+                                            className={`h-full rounded-full transition-all duration-300 ${speakerColor}`}
+                                            style={{ width: `${percentage}%` }}
+                                          />
+                                        )}
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            );
+                          })()}
                         </CardHeader>
                       </Card>
-                    </div>
+                </div>
 
-                    <Card className="flex-1 flex flex-col overflow-hidden mt-4">
-                      <CardHeader className="flex flex-row items-center justify-between flex-shrink-0">
-                        <CardTitle>Transcript</CardTitle>
+                {/* Transcript */}
+                <div className="min-h-[500px]">
+                  <Card className="h-full flex flex-col">
+                      <CardHeader className="flex flex-row items-center justify-between flex-shrink-0 py-3 px-6">
+                        <div className="flex items-center gap-2">
+                          <CardTitle>Transcript</CardTitle>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-muted-foreground hover:text-foreground opacity-50 hover:opacity-100"
+                            onClick={() => {
+                              const transcriptText = messages
+                                .map(m => `${m.speaker}: ${m.content}`)
+                                .join('\n\n');
+                              navigator.clipboard.writeText(transcriptText);
+                              toast({ title: "Copied", description: "Transcript copied to clipboard" });
+                            }}
+                          >
+                            <Copy className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
                         <div className="w-64">
                           <div className="relative flex items-center">
                             {searchQuery ? (
-                              <X className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground cursor-pointer hover:text-foreground" onClick={clearSearch} />
+                              <X className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground cursor-pointer hover:text-foreground" onClick={clearSearch} />
                             ) : (
-                              <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                             )}
                             <Input
                               placeholder="Search..."
-                              className="pl-8"
+                              className="pl-10 rounded-lg focus:ring-0 focus:outline-none focus-visible:ring-0 !border-0"
                               value={searchQuery}
                               onChange={(e) => setSearchQuery(e.target.value)}
                               onKeyDown={(e) => e.key === 'Escape' && clearSearch()}
@@ -456,14 +636,13 @@ const Transcript = () => {
                           </div>
                         </div>
                       </CardHeader>
-                      <CardContent className="flex-1 overflow-hidden p-0 flex flex-col">
-                        <div className="flex-1 p-4 overflow-y-auto hide-scrollbar">
+                      <div className="flex-1 overflow-y-auto pb-6 hide-scrollbar">
+                        <div className="h-full">
                           {messages.length > 0 ? (
                             <MessageList
                               messages={messages}
                               hoveredDelete={hoveredDelete}
                               onStar={toggleStar}
-                              onAddToActionItems={addToActionItems}
                               onDelete={deleteMessage}
                               onHoverDelete={setHoveredDelete}
                               searchQuery={searchQuery}
@@ -501,85 +680,17 @@ const Transcript = () => {
                             </div>
                           )}
                         </div>
-                      </CardContent>
+                      </div>
                     </Card>
-                  </div>
-                </div>
-                <div className="lg:col-span-4 overflow-hidden flex flex-col">
-                  <div className="space-y-4 h-full flex flex-col overflow-hidden">
-                    {messages.length > 0 ? (
-                      <>
-                        <SpeakerStats stats={speakerStats} messages={messages} />
-                        <ActionItems
-                          items={actionItems}
-                          newItem={newActionItem}
-                          onNewItemChange={setNewActionItem}
-                          onAddItem={() => {
-                            if (newActionItem.trim()) {
-                              setActionItems([
-                                ...actionItems,
-                                { id: crypto.randomUUID(), content: newActionItem, isInferred: false, isEditing: false },
-                              ]);
-                              setNewActionItem("");
-                            }
-                          }}
-                          onDeleteItem={(id: string) => setActionItems(items => items.filter(item => item.id !== id))}
-                          onEditItem={(id: string, content: string) => setActionItems(items => items.map(item => item.id === id ? { ...item, content, isEditing: false } : item))}
-                          onSetEditing={setActionItems}
-                        />
-                      </>
-                    ) : isTranscriptLoading ? (
-                      <>
-                        <div className="bg-background rounded-lg border p-4 animate-pulse">
-                          <div className="mb-4"><div className="h-5 w-32 bg-gray-200 dark:bg-gray-700 rounded" /></div>
-                          <div className="space-y-3">
-                            {Array.from({ length: 3 }).map((_, i) => (
-                              <div key={i} className="flex items-center space-x-2">
-                                <div className="h-6 w-6 rounded-full bg-gray-200 dark:bg-gray-700" />
-                                <div className="flex-1">
-                                  <div className="h-4 w-24 mb-1 bg-gray-200 dark:bg-gray-700 rounded" />
-                                  <div className="w-full bg-gray-100 dark:bg-gray-800 h-2 rounded-full"><div className={`h-full ${i === 0 ? 'w-2/3' : i === 1 ? 'w-1/2' : 'w-1/4'} bg-gray-200 dark:bg-gray-700`} /></div>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                        <div className="bg-background rounded-lg border flex-1 animate-pulse">
-                          <div className="p-4 border-b"><div className="h-5 w-32 bg-gray-200 dark:bg-gray-700 rounded" /></div>
-                          <div className="p-4 space-y-3">
-                            {Array.from({ length: 3 }).map((_, i) => (
-                              <div key={i} className="flex items-start space-x-2">
-                                <div className="h-4 w-4 mt-1 rounded bg-gray-200 dark:bg-gray-700" />
-                                <div className="flex-1 h-4 bg-gray-200 dark:bg-gray-700 rounded" />
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      </>
-                    ) : (
-                      <>
-                        <SpeakerStats stats={{}} messages={[]} />
-                        <ActionItems items={[]} newItem="" onNewItemChange={() => {}} onAddItem={() => {}} onDeleteItem={() => {}} onEditItem={() => {}} onSetEditing={() => {}} />
-                      </>
-                    )}
-                  </div>
                 </div>
               </div>
-            </div>
-          </div>
         ) : (
-          <div className="container mx-auto px-4 py-8">
-            <div className="grid gap-8">
-              <div className="min-w-0">
-                <MeetingListView
-                  meetings={meetings || []}
-                  onMeetingSelect={handleMeetingSelect}
-                  onMeetingUpdate={handleMeetingsUpdate}
-                  isLoading={isInitialLoading}
-                />
-              </div>
-            </div>
-          </div>
+          <MeetingListView
+            meetings={meetings || []}
+            onMeetingSelect={handleMeetingSelect}
+            onMeetingUpdate={handleMeetingsUpdate}
+            isLoading={isInitialLoading}
+          />
         )}
       </div>
     </div>

@@ -1,8 +1,8 @@
 import React, { useEffect, useRef, useCallback } from "react";
 import { Avatar, AvatarFallback } from "./ui/avatar";
 import { Button } from "./ui/button";
-import { Star, ListTodo } from "lucide-react";
-import { speakerColors } from "../data/meetings";
+import { Star } from "lucide-react";
+import { getSpeakerColor } from "../data/meetings";
 import { cn, formatTimestamp } from "../lib/utils";
 import "./shimmer.css";
 
@@ -22,7 +22,6 @@ interface MessageListProps {
   messages: Message[];
   hoveredDelete: string | null;
   onStar: (id: string) => void;
-  onAddToActionItems: (content: string, messageId: string) => void;
   onDelete: (id: string) => void;
   onHoverDelete: (id: string | null) => void;
   searchQuery?: string;
@@ -62,7 +61,7 @@ const highlightSearchText = (text: string, searchQuery: string) => {
     <>
       {parts.map((part, i) => 
         regex.test(part) ? (
-          <span key={i} className="bg-yellow-200 dark:bg-yellow-800 text-black dark:text-white">
+          <span key={i} className="bg-yellow-200/60 dark:bg-yellow-700/40">
             {part}
           </span>
         ) : (
@@ -115,7 +114,6 @@ export function MessageList({
   messages,
   hoveredDelete,
   onStar,
-  onAddToActionItems,
   onDelete,
   onHoverDelete,
   searchQuery = "",
@@ -180,14 +178,14 @@ export function MessageList({
               }}
               className={cn(
                 "group flex items-start space-x-3 py-2 px-3 rounded-md transition-colors",
-                message.isStarred && "bg-yellow-100 dark:bg-yellow-900/30",
+                message.isStarred && "bg-yellow-100/50 dark:bg-yellow-900/20",
                 hoveredDelete === message.id && "bg-red-500/10",
                 isCurrentSearchResult && "bg-blue-300/20 border border-blue-400",
                 isSearchResult && !isCurrentSearchResult && "bg-blue-200/10"
               )}
             >
-              <Avatar className={`${speakerColors[message.speaker]} h-6 w-6 text-xs`}>
-                <AvatarFallback>{getNameInitial(message.speaker)}</AvatarFallback>
+              <Avatar className="h-6 w-6 text-xs">
+                <AvatarFallback className={getSpeakerColor(message.speaker)}>{getNameInitial(message.speaker)}</AvatarFallback>
               </Avatar>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center space-x-2 text-sm">
@@ -196,7 +194,7 @@ export function MessageList({
                     {formatTimestamp(message.timestamp, message.call_time, message.capture_time)}
                   </span>
                 </div>
-                <p className="mt-0.5 text-sm">
+                <p className="mt-1.5 text-sm">
                   {searchQuery ? 
                     highlightSearchText(message.content, searchQuery) : 
                     message.content
@@ -223,20 +221,6 @@ export function MessageList({
                     className="h-3 w-3" 
                     fill={message.isStarred ? "currentColor" : "none"}
                   />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className={cn(
-                    "h-6 w-6",
-                    message.isActionItem 
-                      ? "text-blue-500 bg-blue-100/50 dark:bg-blue-900/50 opacity-100"
-                      : "opacity-0 group-hover:opacity-100"
-                  )}
-                  onClick={() => onAddToActionItems(message.content, message.id)}
-                  title={message.isActionItem ? "Remove from action items" : "Add to action items"}
-                >
-                  <ListTodo className="h-3 w-3" />
                 </Button>
               </div>
             </div>

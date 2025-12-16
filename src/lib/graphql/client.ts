@@ -10,7 +10,17 @@ import { GraphQLResponse, GraphQLError } from '../../types';
 
 const GRAPHQL_URL = process.env.REACT_APP_GRAPHQL_URL!;
 const GRAPHQL_WS_URL = process.env.REACT_APP_GRAPHQL_WS_URL!;
-const AUTH_TOKEN = process.env.REACT_APP_AUTH_TOKEN!;
+
+// Token store - set by AuthContext after Firebase login
+let currentToken: string | null = null;
+
+export function setAuthToken(token: string | null): void {
+  currentToken = token;
+}
+
+export function getAuthToken(): string | null {
+  return currentToken;
+}
 
 // -----------------------------------------------------------------------------
 // GraphQL Client
@@ -18,11 +28,13 @@ const AUTH_TOKEN = process.env.REACT_APP_AUTH_TOKEN!;
 
 export class GraphQLClient {
   private url: string;
-  private token: string;
 
-  constructor(url: string = GRAPHQL_URL, token: string = AUTH_TOKEN) {
+  constructor(url: string = GRAPHQL_URL) {
     this.url = url;
-    this.token = token;
+  }
+
+  private getToken(): string {
+    return currentToken || '';
   }
 
   async query<T>(
@@ -34,7 +46,7 @@ export class GraphQLClient {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${this.token}`,
+        'Authorization': `Bearer ${this.getToken()}`,
       },
       body: JSON.stringify({
         query,
@@ -100,15 +112,17 @@ type SubscriptionHandler<T> = {
 
 export class GraphQLSubscriptionClient {
   private url: string;
-  private token: string;
   private ws: WebSocket | null = null;
   private subscriptions: Map<string, SubscriptionHandler<unknown>> = new Map();
   private messageId = 0;
   private connectionPromise: Promise<void> | null = null;
 
-  constructor(url: string = GRAPHQL_WS_URL, token: string = AUTH_TOKEN) {
+  constructor(url: string = GRAPHQL_WS_URL) {
     this.url = url;
-    this.token = token;
+  }
+
+  private getToken(): string {
+    return currentToken || '';
   }
 
   private connect(): Promise<void> {
@@ -123,7 +137,7 @@ export class GraphQLSubscriptionClient {
         this.ws!.send(JSON.stringify({
           type: 'connection_init',
           payload: {
-            authorization: this.token,
+            authorization: this.getToken(),
           },
         }));
       };

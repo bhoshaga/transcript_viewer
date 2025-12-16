@@ -42,32 +42,11 @@ export const logger = {
  * @returns A formatted timestamp string
  */
 export function formatTimestamp(
-  timestamp?: string, 
-  call_time?: string, 
+  timestamp?: string,
+  call_time?: string,
   capture_time?: string
 ): string {
-  // If we have both call_time and capture_time, format them together
-  if (call_time && capture_time) {
-    try {
-      const captureDate = new Date(capture_time);
-      if (!isNaN(captureDate.getTime())) {
-        // Format the capture time to local time
-        const formattedCaptureTime = captureDate.toLocaleTimeString([], {
-          hour: '2-digit',
-          minute: '2-digit',
-          second: '2-digit',
-          hour12: true
-        });
-        
-        // Return the combined format: "11:15 • 9:11:42 AM"
-        return `${call_time} • ${formattedCaptureTime}`;
-      }
-    } catch (error) {
-      console.error("Error formatting capture time:", error);
-    }
-  }
-
-  // If we only have call_time, use that
+  // Just return call_time (duration) if available
   if (call_time) {
     return call_time;
   }

@@ -4,7 +4,7 @@
 
 import { graphqlClient } from '../lib/graphql/client';
 import { LIST_MEETINGS, GET_MEETING, GET_MEETING_WITH_TRANSCRIPT } from '../lib/graphql/queries';
-import { ARCHIVE_MEETING, UPDATE_MEETING } from '../lib/graphql/mutations';
+import { ARCHIVE_MEETING, UPDATE_MEETING, SHARE_MEETING, UPDATE_MEETING_SHARING } from '../lib/graphql/mutations';
 import {
   Meeting,
   ListMeetingsResponse,
@@ -118,4 +118,43 @@ export async function updateMeeting(
   );
 
   return data.updateMeeting.success;
+}
+
+// -----------------------------------------------------------------------------
+// Sharing API Functions
+// -----------------------------------------------------------------------------
+
+interface ShareMeetingData {
+  shareMeeting: { success: boolean; shareId: string };
+}
+
+interface UpdateMeetingSharingData {
+  updateMeetingSharing: { key: string; reach: string; expiry: number };
+}
+
+export async function shareMeetingWithEmail(
+  meetingId: string,
+  email: string,
+  accessLevel: 'VIEW' | 'EDIT' | 'ADMIN' = 'VIEW'
+): Promise<{ success: boolean; shareId: string }> {
+  const data = await graphqlClient.mutate<ShareMeetingData>(
+    SHARE_MEETING,
+    { input: { meetingId, sharedWithEmail: email, accessLevel } },
+    'ShareMeeting'
+  );
+
+  return data.shareMeeting;
+}
+
+export async function generateShareLink(
+  meetingId: string,
+  reach: 'PRIVATE' | 'ANYONE_WITH_LINK' | 'PUBLIC' = 'ANYONE_WITH_LINK'
+): Promise<{ key: string; reach: string; expiry: number }> {
+  const data = await graphqlClient.mutate<UpdateMeetingSharingData>(
+    UPDATE_MEETING_SHARING,
+    { input: { meetingId, reach, expiry: null } },
+    'UpdateMeetingSharing'
+  );
+
+  return data.updateMeetingSharing;
 }

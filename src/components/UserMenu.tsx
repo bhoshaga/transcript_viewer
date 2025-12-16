@@ -1,24 +1,29 @@
 import { Button } from "./ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { Separator } from "./ui/separator";
-import { UserCircle, CreditCard } from "lucide-react";
-import { getEnv } from "../lib/useEnv";
+import { UserCircle, CreditCard, LogOut } from "lucide-react";
+import { useAuth } from "../contexts/AuthContext";
+import { logout } from "../lib/auth";
 
 export function UserMenu() {
-  const { USER_NAME, USER_EMAIL } = getEnv();
+  const { user } = useAuth();
+
+  const handleLogout = async () => {
+    await logout();
+  };
 
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <Button variant="outline" size="sm">
-          <UserCircle className="h-4 w-4" />
+        <Button variant="ghost" size="icon" className="h-8 w-8 [&_svg]:size-5">
+          <UserCircle />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-56 bg-card border-border p-2">
+      <PopoverContent className="w-56 bg-card border-border p-2" align="end">
         <div className="space-y-3">
           <div className="px-2 py-1.5">
-            <div className="font-medium">{USER_NAME}</div>
-            <div className="text-xs text-muted-foreground">{USER_EMAIL}</div>
+            <div className="font-medium">{user?.displayName || 'User'}</div>
+            <div className="text-xs text-muted-foreground">{user?.email || ''}</div>
           </div>
           <Separator />
           <Button variant="ghost" className="w-full justify-start" size="sm">
@@ -40,6 +45,16 @@ export function UserMenu() {
               Changelog
             </a>
           </div>
+          <Separator />
+          <Button
+            variant="ghost"
+            className="w-full justify-start text-red-500 hover:text-red-500 hover:bg-red-500/10"
+            size="sm"
+            onClick={handleLogout}
+          >
+            <LogOut className="mr-2 h-4 w-4" />
+            Sign out
+          </Button>
         </div>
       </PopoverContent>
     </Popover>

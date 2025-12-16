@@ -17,6 +17,10 @@ module.exports = {
       },
     },
     extend: {
+      fontFamily: {
+        sans: ['Geist Sans', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
+        mono: ['Geist Mono', 'Menlo', 'Monaco', 'Consolas', 'monospace'],
+      },
       keyframes: {
         shimmer: {
           '100%': { transform: 'translateX(100%)' },

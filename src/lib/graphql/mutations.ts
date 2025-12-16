@@ -44,6 +44,16 @@ export const REMOVE_SHARE = `
   }
 `;
 
+export const UPDATE_MEETING_SHARING = `
+  mutation UpdateMeetingSharing($input: UpdateMeetingSharingInput!) {
+    updateMeetingSharing(input: $input) {
+      key
+      reach
+      expiry
+    }
+  }
+`;
+
 // -----------------------------------------------------------------------------
 // Task Mutations
 // -----------------------------------------------------------------------------

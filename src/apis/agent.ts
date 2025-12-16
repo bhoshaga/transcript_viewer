@@ -45,18 +45,22 @@ export async function startAgentRun(
 ): Promise<string> {
   const context: AgentContext[] = [{ id: meetingId, type: 'meeting' }];
 
+  const input = {
+    prompt,
+    context,
+    triggeredBy: 'WebApp',
+    entryMethod: 'custom_user_prompt',
+  };
+
+  console.log('[agent] startAgentRun input:', JSON.stringify(input, null, 2));
+
   const data = await graphqlClient.mutate<StartAgentRunData>(
     START_AGENT_RUN,
-    {
-      input: {
-        prompt,
-        context,
-        triggeredBy: 'WebApp',
-        entryMethod: 'custom_user_prompt',
-      },
-    },
+    { input },
     'StartAgentRun'
   );
+
+  console.log('[agent] startAgentRun response:', JSON.stringify(data, null, 2));
 
   return data.startAgentRun.agentRunId;
 }
@@ -103,15 +107,25 @@ export async function subscribeToAgentRun(
     onComplete: () => void;
   }
 ): Promise<() => void> {
+  console.log('[agent] Subscribing to agentRunId:', agentRunId);
+
   return subscriptionClient.subscribe<AgentRunUpdateData>(
     AGENT_RUN_UPDATES,
     { agentRunId },
     {
       next: (data) => {
-        handlers.onUpdate(data.agentRun);
+        console.log('[agent] Subscription data received:', JSON.stringify(data, null, 2));
+        console.log('[agent] data keys:', data ? Object.keys(data) : 'data is null');
+        handlers.onUpdate(data?.agentRun);
       },
-      error: handlers.onError,
-      complete: handlers.onComplete,
+      error: (err) => {
+        console.error('[agent] Subscription error:', err);
+        handlers.onError(err);
+      },
+      complete: () => {
+        console.log('[agent] Subscription complete');
+        handlers.onComplete();
+      },
     }
   );
 }

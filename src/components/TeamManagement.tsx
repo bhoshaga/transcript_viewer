@@ -5,7 +5,7 @@ import { Avatar, AvatarFallback } from "./ui/avatar"
 import { Separator } from "./ui/separator"
 import { Badge } from "./ui/badge"
 import { Mail, Users } from "lucide-react"
-import { speakerColors } from '../data/meetings'
+import { getSpeakerColor } from '../data/meetings'
 
 // Local Member type
 interface Member {
@@ -52,8 +52,8 @@ export function TeamManagement({ members }: TeamManagementProps) {
                 className="flex items-center justify-between p-2 rounded-md hover:bg-secondary/50 transition-colors"
               >
                 <div className="flex items-center space-x-3">
-                  <Avatar className={speakerColors[member.name]}>
-                    <AvatarFallback>{member.name[0]}</AvatarFallback>
+                  <Avatar>
+                    <AvatarFallback className={getSpeakerColor(member.name)}>{member.name[0]}</AvatarFallback>
                   </Avatar>
                   <div>
                     <div className="font-medium text-foreground">{member.name}</div>

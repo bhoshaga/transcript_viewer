@@ -5,6 +5,8 @@
   "dependencies": {
     "@emotion/react": "^11.13.3",
     "@emotion/styled": "^11.13.0",
+    "@fontsource/geist-mono": "^5.2.7",
+    "@fontsource/geist-sans": "^5.2.5",
     "@mui/material": "^6.1.6",
     "@mui/styled-engine": "^6.1.6",
     "@mui/styled-engine-sc": "^6.1.6",
@@ -23,6 +25,7 @@
     "@types/react-dom": "^18.3.1",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.1",
+    "firebase": "^12.6.0",
     "lucide-react": "^0.453.0",
     "markdown-to-jsx": "^7.3.2",
     "react": "^19.2.3",

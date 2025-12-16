@@ -11,21 +11,300 @@ Complete API reference for frontend developers building on top of Stru Meet.
 
 ## Authentication
 
-All requests require a JWT token in the Authorization header:
+All requests require a Firebase JWT token in the Authorization header:
 
 ```
-Authorization: Bearer <jwt-token>
+Authorization: Bearer <firebase-id-token>
 ```
+
+---
+
+### Firebase Auth Implementation (Frontend)
+
+#### 1. Install Firebase SDK
+
+```bash
+npm install firebase
+```
+
+#### 2. Initialize Firebase
+
+```typescript
+// src/lib/firebase.ts
+import { initializeApp } from 'firebase/app';
+import { getAuth } from 'firebase/auth';
+
+const firebaseConfig = {
+  apiKey: "your-api-key",
+  authDomain: "your-project.firebaseapp.com",
+  projectId: "your-project-id",
+  // ... other config
+};
+
+export const app = initializeApp(firebaseConfig);
+export const auth = getAuth(app);
+```
+
+#### 3. Sign In with Google
+
+```typescript
+// src/lib/auth.ts
+import { auth } from './firebase';
+import { signInWithPopup, GoogleAuthProvider, signOut } from 'firebase/auth';
+
+const googleProvider = new GoogleAuthProvider();
+
+export async function signInWithGoogle() {
+  try {
+    const result = await signInWithPopup(auth, googleProvider);
+    const idToken = await result.user.getIdToken();
+    return { user: result.user, token: idToken };
+  } catch (error) {
+    console.error('Sign in failed:', error);
+    throw error;
+  }
+}
+
+export async function logout() {
+  await signOut(auth);
+}
+```
+
+#### 4. Auth Context (React)
+
+```typescript
+// src/contexts/AuthContext.tsx
+import { createContext, useContext, useEffect, useState } from 'react';
+import { User, onAuthStateChanged } from 'firebase/auth';
+import { auth } from '../lib/firebase';
+
+interface AuthContextType {
+  user: User | null;
+  token: string | null;
+  loading: boolean;
+}
+
+const AuthContext = createContext<AuthContextType>({
+  user: null,
+  token: null,
+  loading: true
+});
+
+export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const [user, setUser] = useState<User | null>(null);
+  const [token, setToken] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      setUser(user);
+      if (user) {
+        // Get fresh token (auto-refreshes if expired)
+        const idToken = await user.getIdToken();
+        setToken(idToken);
+      } else {
+        setToken(null);
+      }
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  // Refresh token periodically (tokens expire after 1 hour)
+  useEffect(() => {
+    if (!user) return;
+
+    const refreshToken = async () => {
+      const newToken = await user.getIdToken(true); // force refresh
+      setToken(newToken);
+    };
+
+    // Refresh every 55 minutes
+    const interval = setInterval(refreshToken, 55 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, [user]);
+
+  return (
+    <AuthContext.Provider value={{ user, token, loading }}>
+      {children}
+    </AuthContext.Provider>
+  );
+}
+
+export const useAuth = () => useContext(AuthContext);
+```
+
+#### 5. API Client with Auth
+
+```typescript
+// src/lib/api.ts
+import { useAuth } from '../contexts/AuthContext';
+
+const API_URL = 'http://127.0.0.1:8000/api/2/graphql';
+
+export async function graphqlRequest(
+  token: string,
+  operationName: string,
+  query: string,
+  variables: Record<string, any> = {}
+) {
+  const response = await fetch(API_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      operationName,
+      query,
+      variables,
+    }),
+  });
+
+  const json = await response.json();
+  if (json.errors) {
+    throw new Error(json.errors[0].message);
+  }
+  return json.data;
+}
+
+// React hook for API calls
+export function useApi() {
+  const { token } = useAuth();
+
+  return {
+    query: (operationName: string, query: string, variables?: Record<string, any>) =>
+      graphqlRequest(token!, operationName, query, variables),
+  };
+}
+```
+
+#### 6. WebSocket with Auth (Subscriptions)
+
+```typescript
+// src/lib/websocket.ts
+import { createClient } from 'graphql-ws';
+
+export function createAuthenticatedWsClient(token: string) {
+  return createClient({
+    url: 'ws://127.0.0.1:8000/api/2/graphql',
+    connectionParams: {
+      authorization: token,
+    },
+    // Reconnect on connection lost
+    retryAttempts: 5,
+    shouldRetry: () => true,
+  });
+}
+
+// Usage with subscriptions
+export function subscribeToAgentRun(
+  client: ReturnType<typeof createClient>,
+  agentRunId: string,
+  onData: (data: any) => void
+) {
+  return client.subscribe(
+    {
+      query: `
+        subscription AgentRunUpdates($agentRunId: ID!) {
+          agentRun(agentRunId: $agentRunId) {
+            id
+            status
+            updatedAt
+            hasUsedAICredit
+            conversationHistory {
+              __typename
+              ... on AgentConversationHistoryItemUser {
+                id
+                role
+                status
+                timestamp
+                content
+              }
+              ... on AgentConversationHistoryItemAssistant {
+                id
+                role
+                status
+                timestamp
+                content
+                quickReplies
+              }
+            }
+          }
+        }
+      `,
+      variables: { agentRunId },
+    },
+    {
+      next: (data) => onData(data.data),
+      error: (err) => console.error('Subscription error:', err),
+      complete: () => console.log('Subscription complete'),
+    }
+  );
+}
+```
+
+#### 7. Protected Routes
+
+```typescript
+// src/components/ProtectedRoute.tsx
+import { Navigate } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
+
+export function ProtectedRoute({ children }: { children: React.ReactNode }) {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return <div>Loading...</div>;
+  }
+
+  if (!user) {
+    return <Navigate to="/login" />;
+  }
+
+  return <>{children}</>;
+}
+```
+
+---
+
+### Backend Token Verification
+
+| Mode | Environment Variable | Behavior |
+|------|---------------------|----------|
+| **Development** | `DEV_MODE=true` (default) | Decodes any JWT, no verification |
+| **Production** | `DEV_MODE=false` | Verifies with Firebase Admin SDK |
+
+**Development mode (`DEV_MODE=true`):**
+- Just decodes the JWT payload
+- No signature verification
+- Accepts any user_id
+
+**Production mode (`DEV_MODE=false`):**
+1. Frontend calls `user.getIdToken()` to get Firebase ID token
+2. Sends token in `Authorization: Bearer <token>` header
+3. Backend calls `firebase_auth.verify_id_token(token)`
+4. If valid, extracts `uid`, `email`, `name`
+5. If invalid/expired, returns 401 Unauthorized
+
+**To enable production mode:**
+```bash
+export DEV_MODE=false
+python server/main.py
+```
+
+---
 
 ### Test Token (Development Only)
 
-For local development without Firebase auth, use this hardcoded test token:
+When `DEV_MODE=true` (default), the backend accepts this test token for local development:
 
 ```
 eyJhbGciOiAibm9uZSIsICJ0eXAiOiAiSldUIn0.eyJ1c2VyX2lkIjogIkhZR2J3VWEwc3JmTnFiZ2RGVmdZcnVkZWxpNTMiLCAic3ViIjogIkhZR2J3VWEwc3JmTnFiZ2RGVmdZcnVkZWxpNTMiLCAiZW1haWwiOiAiYmhvc2hhZ2FAZ21haWwuY29tIiwgIm5hbWUiOiAiQmhvc2hhZ2EgTWl0cnJhbiIsICJwaWN0dXJlIjogImh0dHBzOi8vbGgzLmdvb2dsZXVzZXJjb250ZW50LmNvbS9hL2RlZmF1bHQtdXNlciJ9.test_signature
 ```
 
-**Decoded payload:**
+**Test user:**
 ```json
 {
   "user_id": "HYGbwUa0srfNqbgdFVgYrudeli53",
@@ -34,25 +313,17 @@ eyJhbGciOiAibm9uZSIsICJ0eXAiOiAiSldUIn0.eyJ1c2VyX2lkIjogIkhZR2J3VWEwc3JmTnFiZ2RG
 }
 ```
 
-**Example usage:**
+**curl example:**
 ```bash
-export TEST_TOKEN="eyJhbGciOiAibm9uZSIsICJ0eXAiOiAiSldUIn0.eyJ1c2VyX2lkIjogIkhZR2J3VWEwc3JmTnFiZ2RGVmdZcnVkZWxpNTMiLCAic3ViIjogIkhZR2J3VWEwc3JmTnFiZ2RGVmdZcnVkZWxpNTMiLCAiZW1haWwiOiAiYmhvc2hhZ2FAZ21haWwuY29tIiwgIm5hbWUiOiAiQmhvc2hhZ2EgTWl0cnJhbiIsICJwaWN0dXJlIjogImh0dHBzOi8vbGgzLmdvb2dsZXVzZXJjb250ZW50LmNvbS9hL2RlZmF1bHQtdXNlciJ9.test_signature"
+export TOKEN="eyJhbGciOiAibm9uZSIsICJ0eXAiOiAiSldUIn0.eyJ1c2VyX2lkIjogIkhZR2J3VWEwc3JmTnFiZ2RGVmdZcnVkZWxpNTMiLCAic3ViIjogIkhZR2J3VWEwc3JmTnFiZ2RGVmdZcnVkZWxpNTMiLCAiZW1haWwiOiAiYmhvc2hhZ2FAZ21haWwuY29tIiwgIm5hbWUiOiAiQmhvc2hhZ2EgTWl0cnJhbiIsICJwaWN0dXJlIjogImh0dHBzOi8vbGgzLmdvb2dsZXVzZXJjb250ZW50LmNvbS9hL2RlZmF1bHQtdXNlciJ9.test_signature"
 
 curl -X POST http://127.0.0.1:8000/api/2/graphql \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $TEST_TOKEN" \
-  -d '{"operationName":"ListMeetings","variables":{"type":"MyMeetings","offset":0,"filter":{}},"query":"query { meetings(type: MyMeetings, filter: {}) { meetings { id title } } }"}'
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{"query":"{ meetings(type: MyMeetings, filter: {}) { meetings { id title } } }"}'
 ```
 
-For GraphQL WebSocket, pass token in connection_init:
-```json
-{
-  "type": "connection_init",
-  "payload": {
-    "authorization": "<firebase-jwt-token>"
-  }
-}
-```
+> **Warning:** Test tokens are NOT verified. Never use `DEV_MODE=true` in production!
 
 ---
 
@@ -80,8 +351,8 @@ query GetMeeting($meetingId: ID!) {
     id
     title
     platform
-    createdAt
-    updatedAt
+    created
+    modified
     participants {
       name
       analytics { textLength }
@@ -105,8 +376,8 @@ query GetMeeting($meetingId: ID!) {
       "id": "a5ea703731bb38fe443a",
       "title": "Team Standup",
       "platform": "GOOGLE_MEET",
-      "createdAt": 1765848765845,
-      "updatedAt": 1765848836246,
+      "created": 1765848765845,
+      "modified": 1765848836246,
       "participants": [
         { "name": "John Doe", "analytics": { "textLength": 1234 } }
       ],
@@ -155,11 +426,21 @@ query meetingWithTranscript($meetingId: ID!) {
 ```
 
 **Debug with curl**:
+
+Request body (save as `request.json`):
+```json
+{
+  "operationName": "meetingWithTranscript",
+  "variables": { "meetingId": "3903e170a18c20c44326" },
+  "query": "query meetingWithTranscript($meetingId: ID!) { meeting(id: $meetingId) { id title transcript { id blocks { speakerName transcript timestamp } } } }"
+}
+```
+
 ```bash
 curl -s -X POST http://127.0.0.1:8000/api/2/graphql \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_TOKEN" \
-  -d '{"operationName":"meetingWithTranscript","variables":{"meetingId":"MEETING_ID"},"query":"query meetingWithTranscript($meetingId: ID!) { meeting(id: $meetingId) { id title transcript { id blocks { speakerName transcript timestamp } } } }"}'
+  -d @request.json
 ```
 
 **Response**:
@@ -485,6 +766,142 @@ mutation RemoveShare($input: RemoveShareInput!) {
 {
   "input": {
     "shareId": "share_abc123"
+  }
+}
+```
+
+---
+
+## Update Meeting Sharing (Copy Link)
+
+Enable/disable link sharing for a meeting. When `reach` is not `PRIVATE`, a unique share key is generated that can be used to access the meeting via `/s/{shareKey}`.
+
+```graphql
+mutation UpdateMeetingSharing($input: UpdateMeetingSharingInput!) {
+  updateMeetingSharing(input: $input) {
+    key
+    reach
+    expiry
+  }
+}
+```
+
+**Variables**:
+```json
+{
+  "input": {
+    "meetingId": "a5ea703731bb38fe443a",
+    "reach": "ANYONE_WITH_LINK",
+    "expiry": null
+  }
+}
+```
+
+**Reach Values**:
+- `PRIVATE` - No link sharing (clears the share key)
+- `ANYONE_WITH_LINK` - Anyone with the link can view
+- `PUBLIC` - Listed publicly (if applicable)
+
+**Response**:
+```json
+{
+  "data": {
+    "updateMeetingSharing": {
+      "key": "abc123xyz789",
+      "reach": "ANYONE_WITH_LINK",
+      "expiry": 0
+    }
+  }
+}
+```
+
+**Notes**:
+- `key` is the unique share key for the URL
+- `expiry` is timestamp in ms (0 = no expiry)
+- When reach is changed back to `PRIVATE`, the share key is cleared
+
+---
+
+## Access Shared Meeting (Public Endpoint)
+
+Access a meeting via share link without authentication.
+
+**Endpoint**: `GET /s/{shareKey}`
+
+**Example**:
+```bash
+curl http://127.0.0.1:8000/s/abc123xyz789
+```
+
+**Response**:
+```json
+{
+  "id": "a5ea703731bb38fe443a",
+  "title": "Team Sync",
+  "platform": "GOOGLE_MEET",
+  "duration": 3600,
+  "speechDuration": 2800,
+  "created": 1765848765845,
+  "languageCode": "en-US",
+  "participants": [
+    {
+      "name": "Alice",
+      "analytics": {
+        "textLength": 1500,
+        "speechDuration": 1200
+      }
+    }
+  ],
+  "transcript": {
+    "blocks": [
+      {
+        "messageId": "u1/@spaces/xxx/devices/552",
+        "speakerName": "Alice",
+        "transcript": "Hello everyone!",
+        "timestamp": 0
+      }
+    ]
+  }
+}
+```
+
+**Error Responses**:
+- `404` - Meeting not found or link expired
+- `503` - Database not available
+
+---
+
+## Meeting `sharingLink` Field
+
+The Meeting type now includes a `sharingLink` field:
+
+```graphql
+query GetMeeting($meetingId: ID!) {
+  meeting(id: $meetingId) {
+    id
+    title
+    sharingLink {
+      key
+      reach
+      expiry
+    }
+  }
+}
+```
+
+**Response**:
+```json
+{
+  "data": {
+    "meeting": {
+      "id": "a5ea703731bb38fe443a",
+      "title": "Team Sync",
+      "sharingLink": {
+        "key": "abc123xyz789",
+        "reach": "ANYONE_WITH_LINK",
+        "expiry": 0
+      }
+    }
   }
 }
 ```
@@ -964,6 +1381,24 @@ Connect to `ws://server/api/2/graphql` with `graphql-transport-ws` protocol.
 
 ## Subscribe to AI Response Streaming
 
+### Complete Flow (Step by Step)
+
+**Step 1: Start the AI chat and get the agentRunId**
+```javascript
+const result = await graphqlClient.mutate({
+  mutation: START_AGENT_RUN,
+  variables: {
+    input: {
+      prompt: "What were the action items?",
+      context: [{ id: meetingId, type: "meeting" }]
+    }
+  }
+});
+const agentRunId = result.data.startAgentRun.agentRunId;
+// agentRunId looks like: "W7kaYg4BBOeg7rv5fTNU"
+```
+
+**Step 2: Subscribe to AgentRunUpdates with that agentRunId**
 ```graphql
 subscription AgentRunUpdates($agentRunId: ID!) {
   agentRun(agentRunId: $agentRunId) {
@@ -984,12 +1419,40 @@ subscription AgentRunUpdates($agentRunId: ID!) {
 }
 ```
 
-**Variables**:
+**Variables** (use the agentRunId from Step 1):
 ```json
-{ "agentRunId": "agent_abc123" }
+{ "agentRunId": "W7kaYg4BBOeg7rv5fTNU" }
 ```
 
-**Push Message Format**:
+**Step 3: Handle subscription updates WITH NULL CHECKS**
+```javascript
+// IMPORTANT: agentRun can be null/undefined initially!
+const onUpdate = (data) => {
+  const agentRun = data?.agentRun;
+
+  // Guard against null/undefined
+  if (!agentRun) {
+    console.log('Waiting for AI response...');
+    return;
+  }
+
+  // Guard against missing conversationHistory
+  const history = agentRun.conversationHistory || [];
+
+  if (agentRun.status === 'RUNNING') {
+    // Show "Thinking..." indicator
+    setIsLoading(true);
+  } else if (agentRun.status === 'COMPLETED') {
+    setIsLoading(false);
+    // Get the latest assistant message
+    const assistantMessages = history.filter(m => m.role === 'assistant');
+    const latestResponse = assistantMessages[assistantMessages.length - 1];
+    setResponse(latestResponse?.content || '');
+  }
+};
+```
+
+**Push Message Format** (what you receive via WebSocket):
 ```json
 {
   "id": "subscription-uuid",
@@ -997,9 +1460,29 @@ subscription AgentRunUpdates($agentRunId: ID!) {
   "payload": {
     "data": {
       "agentRun": {
-        "id": "agent_abc123",
+        "id": "W7kaYg4BBOeg7rv5fTNU",
         "status": "COMPLETED",
-        "conversationHistory": [...]
+        "updatedAt": 1765863178970,
+        "hasUsedAICredit": true,
+        "conversationHistory": [
+          {
+            "__typename": "AgentConversationHistoryItemUser",
+            "id": "user_123",
+            "role": "user",
+            "status": "completed",
+            "timestamp": 1765863170000,
+            "content": "What were the action items?"
+          },
+          {
+            "__typename": "AgentConversationHistoryItemAssistant",
+            "id": "assistant_456",
+            "role": "assistant",
+            "status": "completed",
+            "timestamp": 1765863178000,
+            "content": "Based on the meeting transcript, here are the action items...",
+            "quickReplies": ["Tell me more", "Action items", "Summary"]
+          }
+        ]
       }
     }
   }
@@ -1007,9 +1490,13 @@ subscription AgentRunUpdates($agentRunId: ID!) {
 ```
 
 **Status Values**:
-- `RUNNING` - AI is processing (show "Thinking..." indicator)
+- `RUNNING` - AI is processing (show "Thinking..." indicator, `conversationHistory` may be empty)
 - `COMPLETED` - Response ready (hide indicator, show content)
 - `FAILED` - Error occurred
+
+**Common Errors**:
+- `Cannot read properties of undefined (reading 'conversationHistory')` → Add null check: `agentRun?.conversationHistory || []`
+- Empty response → Check `agentRun.status` is `COMPLETED` before reading content
 
 ---
 
@@ -1266,7 +1753,7 @@ async function fetchMeeting(meetingId: string, token: string) {
       query: `
         query GetMeeting($meetingId: ID!) {
           meeting(id: $meetingId) {
-            id title platform createdAt
+            id title platform created
             transcript { blocks { speakerName transcript timestamp } }
           }
         }

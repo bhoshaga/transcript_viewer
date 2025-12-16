@@ -1,26 +1,21 @@
-// Speaker color assignments for UI display
-export const speakerColors: Record<string, string> = {
-  Alice: "bg-blue-400/40",
-  Bob: "bg-green-400/40",
-  Charlie: "bg-yellow-400/40",
-  Diana: "bg-purple-400/40",
-  Eve: "bg-pink-400/40",
-};
+const pastelColors = [
+  "bg-blue-500/60",
+  "bg-indigo-500/60",
+  "bg-purple-500/60",
+  "bg-pink-500/60",
+  "bg-rose-500/60",
+  "bg-orange-500/60",
+  "bg-amber-600/60",
+  "bg-emerald-500/60",
+  "bg-teal-500/60",
+  "bg-cyan-500/60",
+  "bg-sky-500/60",
+  "bg-violet-500/60",
+  "bg-fuchsia-500/60",
+];
 
-// Default color for speakers not in the list
-export const getDefaultSpeakerColor = (speaker: string): string => {
-  const colors = [
-    "bg-blue-400/40",
-    "bg-green-400/40",
-    "bg-yellow-400/40",
-    "bg-purple-400/40",
-    "bg-pink-400/40",
-    "bg-indigo-400/40",
-    "bg-teal-400/40",
-    "bg-orange-400/40",
-  ];
-
-  // Hash the speaker name to get a consistent color
+export const getSpeakerColor = (speaker: string): string => {
+  if (!speaker) return pastelColors[0];
   const hash = speaker.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-  return colors[hash % colors.length];
+  return pastelColors[hash % pastelColors.length];
 };

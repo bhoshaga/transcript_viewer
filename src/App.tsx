@@ -1,19 +1,27 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { BrowserRouter, useRoutes, Navigate } from "react-router-dom";
 import Transcript from "./pages/Transcript";
+import Login from "./pages/Login";
 import "./App.css";
 import MainLayout from "./layout/MainLayout";
 import { ToastProvider } from "./components/ui/toast";
 import { BreadcrumbProvider } from "./lib/BreadcrumbContext";
 import { AIProvider } from "./lib/AIContext";
 import { TranscriptProvider } from "./lib/TranscriptContext";
-import { getEnv } from "./lib/useEnv";
+import { AuthProvider, useAuth } from "./contexts/AuthContext";
+import { ProtectedRoute } from "./components/ProtectedRoute";
+import { setAuthToken } from "./lib/graphql/client";
 
-// Check if auth token is available
-const isAuthenticated = (): boolean => {
-  const { AUTH_TOKEN } = getEnv();
-  return !!AUTH_TOKEN;
-};
+// Sync auth token to GraphQL client
+function AuthTokenSync({ children }: { children: React.ReactNode }) {
+  const { token } = useAuth();
+
+  useEffect(() => {
+    setAuthToken(token);
+  }, [token]);
+
+  return <>{children}</>;
+}
 
 // Component to wrap the MainLayout with providers
 const LayoutWithProviders = () => (
@@ -26,34 +34,46 @@ const LayoutWithProviders = () => (
   </BreadcrumbProvider>
 );
 
-export default function App() {
-  const Router = () =>
-    useRoutes([
-      {
-        element: <LayoutWithProviders />,
-        children: [
-          {
-            path: "/",
-            element: isAuthenticated() ? <Transcript /> : <div>No auth token configured</div>,
-          },
-          {
-            path: "/t/:id",
-            element: isAuthenticated() ? <Transcript /> : <div>No auth token configured</div>,
-          },
-        ],
-      },
-      // Fallback - redirect to root
-      {
-        path: "*",
-        element: <Navigate to="/" replace />,
-      },
-    ]);
+function AppRoutes() {
+  return useRoutes([
+    {
+      path: "/login",
+      element: <Login />,
+    },
+    {
+      element: (
+        <ProtectedRoute>
+          <LayoutWithProviders />
+        </ProtectedRoute>
+      ),
+      children: [
+        {
+          path: "/",
+          element: <Transcript />,
+        },
+        {
+          path: "/t/:id",
+          element: <Transcript />,
+        },
+      ],
+    },
+    {
+      path: "*",
+      element: <Navigate to="/" replace />,
+    },
+  ]);
+}
 
+export default function App() {
   return (
     <ToastProvider>
-      <BrowserRouter>
-        <Router />
-      </BrowserRouter>
+      <AuthProvider>
+        <AuthTokenSync>
+          <BrowserRouter>
+            <AppRoutes />
+          </BrowserRouter>
+        </AuthTokenSync>
+      </AuthProvider>
     </ToastProvider>
   );
 }
