@@ -440,7 +440,7 @@ const Transcript = () => {
           <div className="flex flex-col gap-3 pb-4">
                 {/* Meeting Header */}
                 <div className="flex-shrink-0 relative">
-                  {!selectedMeeting.hasEnded && (
+                  {!isSharedView && !selectedMeeting.hasEnded && (
                     <div className="absolute top-6 right-6 flex items-center space-x-2 z-10">
                       <div className="w-3 h-3 rounded-full bg-green-500 animate-pulse" />
                       <span className="text-xs text-muted-foreground">Live</span>
@@ -694,7 +694,7 @@ const Transcript = () => {
                               searchQuery={searchQuery}
                               searchResults={searchResults}
                               currentSearchIndex={currentSearchIndex}
-                              isLive={!selectedMeeting.hasEnded}
+                              isLive={!isSharedView && !selectedMeeting.hasEnded}
                             />
                           ) : isTranscriptLoading ? (
                             <div className="space-y-2">
