@@ -1,9 +1,20 @@
 // TypeScript declaration for global window.ENV object
-import { Message } from '../types';
 
 interface EnvVariables {
-  OPENAI_API_KEY: string;
-  ENABLE_STREAMING: boolean;
+  GRAPHQL_URL: string;
+  GRAPHQL_WS_URL: string;
+  AUTH_TOKEN: string;
+  USER_ID: string;
+  USER_EMAIL: string;
+  USER_NAME: string;
+}
+
+interface Message {
+  id: string;
+  speaker: string;
+  content: string;
+  timestamp?: string;
+  call_time?: string;
 }
 
 declare global {
@@ -13,4 +24,4 @@ declare global {
   }
 }
 
-export {}; 
+export {};

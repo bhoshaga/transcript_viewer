@@ -2,10 +2,22 @@ import { Card, CardContent, CardHeader, CardTitle } from "./ui/card"
 import { Input } from "./ui/input"
 import { Button } from "./ui/button"
 import { Plus, Trash2 } from "lucide-react"
-import { ActionItem, Message } from '../types'
-import { speakerColors } from '../data/meetings'
-import { cn } from '../lib/utils'
 import { ScrollArea } from "./ui/scroll-area"
+
+// Local types for this component
+interface ActionItem {
+  id: string;
+  content: string;
+  isInferred: boolean;
+  isEditing: boolean;
+}
+
+interface Message {
+  id: string;
+  speaker: string;
+  content: string;
+  call_time?: string;
+}
 
 interface ActionItemsProps {
   items: ActionItem[];

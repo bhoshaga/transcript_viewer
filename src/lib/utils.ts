@@ -1,32 +1,34 @@
 import { type ClassValue, clsx } from "clsx"
 import { twMerge } from "tailwind-merge"
-import { getEnv } from "./useEnv"
- 
+
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
+
+// Check if debug mode is enabled
+const isDebugMode = process.env.REACT_APP_DEBUG === 'true';
 
 /**
  * Debug logger that only outputs to console when DEBUG environment variable is true
  */
 export const logger = {
   log: (...args: any[]) => {
-    if (getEnv().DEBUG) {
+    if (isDebugMode) {
       console.log(...args);
     }
   },
   error: (...args: any[]) => {
-    if (getEnv().DEBUG) {
+    if (isDebugMode) {
       console.error(...args);
     }
   },
   warn: (...args: any[]) => {
-    if (getEnv().DEBUG) {
+    if (isDebugMode) {
       console.warn(...args);
     }
   },
   info: (...args: any[]) => {
-    if (getEnv().DEBUG) {
+    if (isDebugMode) {
       console.info(...args);
     }
   }

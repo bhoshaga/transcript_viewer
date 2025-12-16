@@ -1,5 +1,5 @@
 import * as React from "react";
-import * as ReactDOM from "react-dom";
+import { createRoot } from "react-dom/client";
 import { X } from "lucide-react";
 import { cn } from "../../lib/utils";
 
@@ -125,14 +125,14 @@ export const toast = (props: ToastProps) => {
     />
   );
 
-  // Use ReactDOM.render instead of createRoot for React 17 compatibility
-  ReactDOM.render(toastComponent, toastElement);
+  const root = createRoot(toastElement);
+  root.render(toastComponent);
 
   setTimeout(() => {
     div.classList.add("opacity-0");
     div.style.transition = "opacity 150ms ease-out";
     setTimeout(() => {
-      ReactDOM.unmountComponentAtNode(toastElement);
+      root.unmount();
       document.body.removeChild(div);
     }, 150);
   }, props.duration || 3000);

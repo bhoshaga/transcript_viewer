@@ -1,6 +1,16 @@
 import React, { createContext, useContext, useState, ReactNode, useEffect, useCallback, useRef } from 'react';
-import { Message } from '../types';
 import { useNavigate, useLocation, useParams } from 'react-router-dom';
+
+// Local Message type for this context
+interface Message {
+  id: string;
+  speaker: string;
+  content: string;
+  timestamp?: string;
+  call_time?: string;
+  capture_time?: string;
+  isStarred?: boolean;
+}
 
 // Enable this to see detailed logs during development
 const DEBUG = false;

@@ -1,12 +1,19 @@
 import { Button } from "./ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "./ui/dialog"
 import { Input } from "./ui/input"
-import { Badge } from "./ui/badge"
 import { Avatar, AvatarFallback } from "./ui/avatar"
 import { Separator } from "./ui/separator"
+import { Badge } from "./ui/badge"
 import { Mail, Users } from "lucide-react"
 import { speakerColors } from '../data/meetings'
-import { Member } from '../types'
+
+// Local Member type
+interface Member {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+}
 
 interface TeamManagementProps {
   members: Member[];

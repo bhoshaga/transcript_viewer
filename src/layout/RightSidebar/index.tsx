@@ -2,15 +2,23 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from "react"
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { ScrollArea } from "../../components/ui/scroll-area";
-import { ArrowUpCircle, Loader2, Plus, X, Minimize } from "lucide-react";
+import { ArrowUpCircle, Loader2, Plus, Minimize } from "lucide-react";
 import { useLocation, useParams } from "react-router-dom";
 import { useAI } from "../../lib/AIContext";
 import { useTranscript } from "../../lib/TranscriptContext";
 import { getContextualSuggestions } from "../../services/aiService";
-import { Message } from "../../types";
 import Markdown from 'markdown-to-jsx';
 import * as ScrollAreaPrimitive from "@radix-ui/react-scroll-area";
 import { cn } from "../../lib/utils";
+
+// Local Message type for transcript data
+interface Message {
+  id: string;
+  speaker: string;
+  content: string;
+  call_time?: string;
+  timestamp?: string;
+}
 
 // Custom CSS to hide scrollbars while preserving functionality
 const hideScrollbarStyles = `

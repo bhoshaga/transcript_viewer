@@ -1,21 +1,9 @@
 import React, { useState } from "react";
 import RightSidebar from "./RightSidebar";
-import { Outlet, useNavigate } from "react-router-dom";
+import { Outlet } from "react-router-dom";
 import { Button } from "../components/ui/button";
 import { UserMenu } from "../components/UserMenu";
-import { ChevronRight, Users, Minimize } from "lucide-react";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "../components/ui/dialog";
-import { Avatar, AvatarFallback } from "../components/ui/avatar";
-import { Input } from "../components/ui/input";
-import { Separator } from "../components/ui/separator";
-import { Mail } from "lucide-react";
-import { currentSpace, speakerColors } from "../data/meetings";
+import { ChevronRight, Minimize } from "lucide-react";
 import { useBreadcrumb } from "../lib/BreadcrumbContext";
 
 // Add some CSS to ensure the toggle button is properly positioned
@@ -51,35 +39,13 @@ if (typeof document !== 'undefined') {
 }
 
 const MainLayout = () => {
-  const navigate = useNavigate();
   const { navigateToMeetingList } = useBreadcrumb();
-  // Add state to control sidebar visibility
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  
-  // Function to get first name
-  const getFirstName = (fullName: string): string => {
-    // Check if name is in "Last, First" format
-    if (fullName.includes(',')) {
-      const parts = fullName.split(',');
-      if (parts.length > 1) {
-        return parts[1].trim(); // Return the first name part
-      }
-    }
-    
-    // Standard format - first part of space-separated name
-    return fullName.split(' ')[0];
-  };
 
   const handleBackToMeetingList = () => {
-    // Use the context method instead of direct navigation
     navigateToMeetingList();
   };
 
-  const handleInviteMember = () => {
-    // Placeholder for invite member functionality
-  };
-
-  // Toggle sidebar function
   const toggleSidebar = () => {
     setIsSidebarOpen(!isSidebarOpen);
   };
@@ -115,56 +81,6 @@ const MainLayout = () => {
           </div>
 
           <div className="flex items-center space-x-2">
-            <Dialog>
-              <DialogTrigger asChild>
-                <Button variant="outline" size="sm">
-                  <Users className="mr-2 h-4 w-4" />
-                  {currentSpace.members.length} Members
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="bg-card border-border">
-                <DialogHeader>
-                  <DialogTitle className="text-foreground">
-                    Team Members
-                  </DialogTitle>
-                </DialogHeader>
-                <div className="space-y-4">
-                  <div className="flex space-x-2">
-                    <Input
-                      placeholder="Email address"
-                      className="bg-background"
-                    />
-                    <Button onClick={handleInviteMember}>
-                      <Mail className="mr-2 h-4 w-4" />
-                      Invite
-                    </Button>
-                  </div>
-                  <Separator className="bg-border" />
-                  <div className="space-y-2">
-                    {currentSpace.members.map((member) => (
-                      <div
-                        key={member.id}
-                        className="flex items-center justify-between p-2 rounded-md hover:bg-secondary/50 transition-colors"
-                      >
-                        <div className="flex items-center space-x-3">
-                          <Avatar className={speakerColors[member.name]}>
-                            <AvatarFallback>{getFirstName(member.name)[0]}</AvatarFallback>
-                          </Avatar>
-                          <div>
-                            <div className="font-medium text-foreground">
-                              {member.name}
-                            </div>
-                            <div className="text-sm text-muted-foreground">
-                              {member.email}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </DialogContent>
-            </Dialog>
             <UserMenu />
           </div>
         </div>

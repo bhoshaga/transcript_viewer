@@ -2,14 +2,22 @@ import React, { useEffect, useRef, useCallback } from "react";
 import { ScrollArea } from "./ui/scroll-area";
 import { Avatar, AvatarFallback } from "./ui/avatar";
 import { Button } from "./ui/button";
-import { Star, ListTodo, Trash2 } from "lucide-react";
-import { Message } from "../types";
+import { Star, ListTodo } from "lucide-react";
 import { speakerColors } from "../data/meetings";
 import { cn, formatTimestamp } from "../lib/utils";
-import { Input } from "./ui/input";
-
-// Add shimmer effect styles
 import "./shimmer.css";
+
+// Local Message type for this component
+interface Message {
+  id: string;
+  speaker: string;
+  content: string;
+  timestamp?: string;
+  call_time?: string;
+  capture_time?: string;
+  isStarred?: boolean;
+  isActionItem?: boolean;
+}
 
 interface MessageListProps {
   messages: Message[];
