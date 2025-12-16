@@ -203,6 +203,7 @@ export const MeetingListView = memo(function MeetingListView({
                   <Avatar
                     key={i}
                     className="h-6 w-6 border border-background"
+                    style={{ zIndex: i + 1 }}
                   >
                     <AvatarFallback className={`text-[10px] ${getSpeakerColor(participant.name)}`}>{participant.name[0]}</AvatarFallback>
                   </Avatar>

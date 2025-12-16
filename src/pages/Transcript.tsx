@@ -24,6 +24,7 @@ import {
   Link,
   Pencil,
   Copy,
+  BarChart2,
 } from "lucide-react";
 import { getSpeakerColor } from "../data/meetings";
 import { Meeting, TranscriptBlock } from "../types";
@@ -235,6 +236,7 @@ const Transcript = () => {
   }, [searchQuery]);
   const [isRenaming, setIsRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState("");
+  const [showSpeakerStats, setShowSpeakerStats] = useState(true);
 
   const navigate = useNavigate();
   const location = useLocation();
@@ -581,7 +583,7 @@ const Transcript = () => {
         {selectedMeeting ? (
           // ===== TRANSCRIPT VIEW =====
           // Shows a specific meeting's transcript detail (/t/:id route)
-          <div className="flex flex-col gap-3 pb-4">
+          <div className="flex flex-col gap-3 h-full">
                 {/* Meeting Header */}
                 <div className="flex-shrink-0 relative">
                   {!isSharedView && !selectedMeeting.hasEnded && (
@@ -689,79 +691,90 @@ const Transcript = () => {
                               >
                                 <Pencil className="h-4 w-4" />
                               </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className={`h-8 w-8 ${showSpeakerStats ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+                                onClick={() => setShowSpeakerStats(!showSpeakerStats)}
+                                title={showSpeakerStats ? "Hide Speaker Stats" : "Show Speaker Stats"}
+                              >
+                                <BarChart2 className="h-4 w-4" />
+                              </Button>
                             </div>
                           </div>
                           {/* Inline Speaker Stats */}
-                          {isTranscriptLoading && Object.keys(speakerStats).length === 0 ? (
-                            // Speaker stats skeleton during loading
-                            <div className="mt-6 space-y-3">
-                              <div className="space-y-1">
-                                <div className="flex justify-between">
-                                  <Skeleton className="h-4 w-24" />
-                                  <Skeleton className="h-4 w-8" />
-                                </div>
-                                <Skeleton className="h-1.5 w-full rounded-full" />
-                              </div>
-                              <div className="space-y-1">
-                                <div className="flex justify-between">
-                                  <Skeleton className="h-4 w-20" />
-                                  <Skeleton className="h-4 w-8" />
-                                </div>
-                                <Skeleton className="h-1.5 w-full rounded-full" />
-                              </div>
-                            </div>
-                          ) : transcriptData && transcriptData.speakerDetails.length > 0 ? (() => {
-                            const { speakerDetails, segments, meetingDuration } = transcriptData;
-
-                            return (
+                          {showSpeakerStats && (
+                            isTranscriptLoading && Object.keys(speakerStats).length === 0 ? (
+                              // Speaker stats skeleton during loading
                               <div className="mt-6 space-y-3">
-                                {speakerDetails.map(({ speaker, percentage }) => {
-                                  const speakerColor = getPastelColor(speaker);
-                                  // Get segments for this speaker
-                                  const speakerSegments = segments.filter(s => s.speaker === speaker);
-
-                                  return (
-                                    <div key={speaker} className="space-y-1">
-                                      <div className="flex justify-between text-sm">
-                                        <span>{speaker}</span>
-                                        <span className="text-muted-foreground">{percentage}%</span>
-                                      </div>
-                                      <div className="h-1.5 bg-secondary rounded-full overflow-hidden relative">
-                                        {meetingDuration > 0 ? (
-                                          speakerSegments.map((segment, idx) => {
-                                            const positionPercent = (segment.startTime / meetingDuration) * 100;
-                                            const widthPercent = Math.max((segment.duration / meetingDuration) * 100, 0.3);
-                                            return (
-                                              <div
-                                                key={idx}
-                                                className={`absolute top-0 h-full ${speakerColor}`}
-                                                style={{
-                                                  left: `${positionPercent}%`,
-                                                  width: `${widthPercent}%`,
-                                                  zIndex: 10
-                                                }}
-                                              />
-                                            );
-                                          })
-                                        ) : (
-                                          <div
-                                            className={`h-full rounded-full transition-all duration-300 ${speakerColor}`}
-                                            style={{ width: `${percentage}%` }}
-                                          />
-                                        )}
-                                      </div>
-                                    </div>
-                                  );
-                                })}
+                                <div className="space-y-1">
+                                  <div className="flex justify-between">
+                                    <Skeleton className="h-4 w-24" />
+                                    <Skeleton className="h-4 w-8" />
+                                  </div>
+                                  <Skeleton className="h-1.5 w-full rounded-full" />
+                                </div>
+                                <div className="space-y-1">
+                                  <div className="flex justify-between">
+                                    <Skeleton className="h-4 w-20" />
+                                    <Skeleton className="h-4 w-8" />
+                                  </div>
+                                  <Skeleton className="h-1.5 w-full rounded-full" />
+                                </div>
                               </div>
-                            );
-                          })() : null}
+                            ) : transcriptData && transcriptData.speakerDetails.length > 0 ? (() => {
+                              const { speakerDetails, segments, meetingDuration } = transcriptData;
+
+                              return (
+                                <div className="mt-6 space-y-3">
+                                  {speakerDetails.map(({ speaker, percentage }) => {
+                                    const speakerColor = getPastelColor(speaker);
+                                    // Get segments for this speaker
+                                    const speakerSegments = segments.filter(s => s.speaker === speaker);
+
+                                    return (
+                                      <div key={speaker} className="space-y-1">
+                                        <div className="flex justify-between text-sm">
+                                          <span>{speaker}</span>
+                                          <span className="text-muted-foreground">{percentage}%</span>
+                                        </div>
+                                        <div className="h-1.5 bg-secondary rounded-full overflow-hidden relative">
+                                          {meetingDuration > 0 ? (
+                                            speakerSegments.map((segment, idx) => {
+                                              const positionPercent = (segment.startTime / meetingDuration) * 100;
+                                              const widthPercent = Math.max((segment.duration / meetingDuration) * 100, 0.3);
+                                              return (
+                                                <div
+                                                  key={idx}
+                                                  className={`absolute top-0 h-full ${speakerColor}`}
+                                                  style={{
+                                                    left: `${positionPercent}%`,
+                                                    width: `${widthPercent}%`,
+                                                    zIndex: 10
+                                                  }}
+                                                />
+                                              );
+                                            })
+                                          ) : (
+                                            <div
+                                              className={`h-full rounded-full transition-all duration-300 ${speakerColor}`}
+                                              style={{ width: `${percentage}%` }}
+                                            />
+                                          )}
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              );
+                            })() : null
+                          )}
                         </CardHeader>
                       </Card>
                 </div>
 
                 {/* Transcript */}
-                <div className="h-[calc(100vh-350px)] min-h-[400px]">
+                <div className="flex-1 min-h-[400px]">
                   <Card className="h-full flex flex-col overflow-hidden">
                       <CardHeader className="flex flex-row items-center justify-between flex-shrink-0 py-3 px-6">
                         <div className="flex items-center gap-2">
@@ -811,7 +824,7 @@ const Transcript = () => {
                           </div>
                         </div>
                       </CardHeader>
-                      <div className={`flex-1 pb-6 ${messages.length > 0 ? 'overflow-y-auto show-scrollbar' : 'overflow-hidden'}`}>
+                      <div className={`flex-1 pb-3 ${messages.length > 0 ? 'overflow-y-auto show-scrollbar' : 'overflow-hidden'}`}>
                         <div className="h-full">
                           {messages.length > 0 ? (
                             <MessageList
