@@ -30,8 +30,8 @@ import { Meeting, TranscriptBlock } from "../types";
 import { MeetingListView } from "../components/MeetingListView";
 import { MessageList } from "../components/MessageList";
 // ActionItems and SpeakerStats removed - speaker stats now inline in header
-import { listMeetings, getMeetingWithTranscript, archiveMeeting, updateMeeting, generateShareLink } from "../apis/meetings";
-import { useNavigate, useLocation, useParams } from "react-router-dom";
+import { listMeetings, getMeetingWithTranscript, archiveMeeting, updateMeeting, generateShareLink, getSharedMeeting } from "../apis/meetings";
+import { useNavigate, useLocation, useParams, useMatch } from "react-router-dom";
 import { toast } from '../components/ui/toast';
 import { useBreadcrumb } from "../lib/BreadcrumbContext";
 import { useTranscript } from '../lib/TranscriptContext';
@@ -119,15 +119,61 @@ const Transcript = () => {
 
   const navigate = useNavigate();
   const location = useLocation();
-  const params = useParams<{ id?: string }>();
+  const params = useParams<{ id?: string; shareKey?: string }>();
   const meetingIdFromUrl = params.id;
+  const shareKey = params.shareKey;
+  const isSharedView = !!shareKey;
   const { registerNavigateHandler } = useBreadcrumb();
 
   // Track if we've loaded from URL to prevent re-triggering
   const hasLoadedFromUrl = useRef(false);
 
-  // Fetch meetings list
+  // Fetch shared meeting (public, no auth)
   useEffect(() => {
+    if (!isSharedView || !shareKey) return;
+
+    const fetchSharedMeeting = async () => {
+      try {
+        setIsInitialLoading(true);
+        const meeting = await getSharedMeeting(shareKey);
+        setSelectedMeeting(meeting as Meeting);
+        setMeetingName(meeting.title);
+
+        if (meeting.transcript?.blocks) {
+          const msgs = meeting.transcript.blocks.map((block: TranscriptBlock, index: number) =>
+            blockToMessage(block, index)
+          );
+          setMessages(msgs);
+          setTranscriptData(msgs as any);
+
+          // Calculate speaker stats
+          const stats: Record<string, number> = {};
+          meeting.transcript.blocks.forEach((block: TranscriptBlock) => {
+            const textLength = block.transcript?.length || 0;
+            stats[block.speakerName] = (stats[block.speakerName] || 0) + textLength;
+          });
+          setSpeakerStats(stats);
+        }
+      } catch (error: any) {
+        console.error("Error fetching shared meeting:", error);
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: error.message || "Failed to load shared meeting.",
+        });
+      } finally {
+        setIsInitialLoading(false);
+      }
+    };
+
+    fetchSharedMeeting();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shareKey, isSharedView]);
+
+  // Fetch meetings list (authenticated)
+  useEffect(() => {
+    if (isSharedView) return; // Skip for shared view
+
     const fetchMeetingsData = async () => {
       try {
         setIsInitialLoading(true);
@@ -158,11 +204,11 @@ const Transcript = () => {
 
     fetchMeetingsData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [meetingIdFromUrl]);
+  }, [meetingIdFromUrl, isSharedView]);
 
-  // Polling for meeting list updates (only when in list view)
+  // Polling for meeting list updates (only when in list view, not shared)
   useEffect(() => {
-    if (selectedMeeting) return;
+    if (selectedMeeting || isSharedView) return;
 
     const pollingInterval = setInterval(async () => {
       try {
@@ -174,7 +220,7 @@ const Transcript = () => {
     }, 30000);
 
     return () => clearInterval(pollingInterval);
-  }, [selectedMeeting]);
+  }, [selectedMeeting, isSharedView]);
 
   const handleMeetingSelect = useCallback(async (meeting: Meeting) => {
     setIsTranscriptLoading(true);

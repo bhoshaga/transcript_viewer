@@ -2,9 +2,10 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from "react"
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { ArrowUpCircle, Loader2, Plus } from "lucide-react";
-import { useLocation, useParams } from "react-router-dom";
+import { useLocation, useParams, useNavigate } from "react-router-dom";
 import { useAI } from "../../lib/AIContext";
 import { useTranscript } from "../../lib/TranscriptContext";
+import { useAuth } from "../../contexts/AuthContext";
 import { getContextualSuggestions } from "../../services/aiService";
 import Markdown from 'markdown-to-jsx';
 import { cn } from "../../lib/utils";
@@ -121,9 +122,11 @@ const RightSidebar = ({}: RightSidebarProps) => {
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const { messages: aiMessages, addUserMessage, clearMessages, isProcessing, resetChatIfTooLong } = useAI();
   const location = useLocation();
+  const navigate = useNavigate();
   const params = useParams<{ id?: string }>();
   const meetingId = params.id || "";
   const { transcriptData, isDetailView } = useTranscript();
+  const { user } = useAuth();
   
   // Track the meeting name for creating better placeholder messages
   const [currentMeetingName, setCurrentMeetingName] = useState<string | undefined>(undefined);
@@ -463,6 +466,23 @@ const RightSidebar = ({}: RightSidebarProps) => {
       handleSendMessage();
     }
   };
+
+  // If not logged in, show sign in prompt
+  if (!user) {
+    return (
+      <div className="h-full flex flex-col">
+        <div className="py-2 px-4 border-b border-border">
+          <span className="text-sm font-medium">Ask Questions</span>
+        </div>
+        <div className="flex-1 flex flex-col items-center justify-center p-4 text-center">
+          <p className="text-sm text-muted-foreground mb-4">Sign in to use AI chat</p>
+          <Button onClick={() => navigate('/login')} variant="outline" size="sm">
+            Sign in
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="h-full flex flex-col">

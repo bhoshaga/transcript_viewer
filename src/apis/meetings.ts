@@ -158,3 +158,18 @@ export async function generateShareLink(
 
   return data.updateMeetingSharing;
 }
+
+// -----------------------------------------------------------------------------
+// Public API (no auth required)
+// -----------------------------------------------------------------------------
+
+export async function getSharedMeeting(shareKey: string): Promise<Meeting & { transcript: Transcript }> {
+  const apiUrl = process.env.REACT_APP_GRAPHQL_URL?.replace('/api/2/graphql', '') || '';
+  const response = await fetch(`${apiUrl}/s/${shareKey}`);
+
+  if (!response.ok) {
+    throw new Error(response.status === 404 ? 'Meeting not found or link expired' : 'Failed to load meeting');
+  }
+
+  return response.json();
+}
