@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useCallback } from "react";
+import React, { useEffect, useRef } from "react";
 import { Avatar, AvatarFallback } from "./ui/avatar";
 import { Button } from "./ui/button";
 import { Star } from "lucide-react";
@@ -123,17 +123,6 @@ export function MessageList({
 }: MessageListProps) {
   const messageRefs = useRef<(HTMLDivElement | null)[]>([]);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
-  const scrollEndRef = useRef<HTMLDivElement>(null);
-  
-  // Scroll to the bottom of the transcript
-  const scrollToBottom = useCallback(() => {
-    if (scrollEndRef.current) {
-      scrollEndRef.current.scrollIntoView({ 
-        behavior: 'smooth', 
-        block: 'end' 
-      });
-    }
-  }, []);
 
   // Auto-scroll to the current search result
   useEffect(() => {
@@ -153,15 +142,6 @@ export function MessageList({
       }
     }
   }, [currentSearchIndex, searchResults]);
-
-  // Auto-scroll to bottom when messages change
-  useEffect(() => {
-    // Only scroll when there are messages and we're not in the middle of a search
-    if (messages.length > 0 && searchResults.length === 0) {
-      // Use setTimeout to ensure the DOM has updated before scrolling
-      setTimeout(scrollToBottom, 100);
-    }
-  }, [messages, scrollToBottom, searchResults.length]);
 
   return (
     <div ref={scrollAreaRef} className="h-full">
@@ -229,8 +209,6 @@ export function MessageList({
         {isLive && (
           <MessageSkeleton />
         )}
-        {/* This div serves as our scroll target - always at the very bottom */}
-        <div ref={scrollEndRef} className="h-px" />
       </div>
     </div>
   );

@@ -111,3 +111,27 @@ code {
 .main-content {
   @apply hide-scrollbar;
 }
+
+/* Visible scrollbar for transcript area */
+.show-scrollbar::-webkit-scrollbar {
+  width: 8px !important;
+  display: block !important;
+}
+
+.show-scrollbar::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.1) !important;
+}
+
+.show-scrollbar::-webkit-scrollbar-thumb {
+  background-color: rgba(166, 173, 186, 0.5) !important;
+  border-radius: 20px !important;
+}
+
+.show-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(166, 173, 186, 0.7) !important;
+}
+
+.show-scrollbar {
+  scrollbar-width: thin !important;
+  scrollbar-color: rgba(166, 173, 186, 0.5) rgba(0, 0, 0, 0.1) !important;
+}

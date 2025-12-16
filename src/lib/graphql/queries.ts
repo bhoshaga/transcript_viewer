@@ -67,6 +67,12 @@ export const GET_MEETING_WITH_TRANSCRIPT = `
       id
       title
       platform
+      participants { name analytics { textLength } }
+      duration
+      speechDuration
+      created
+      modified
+      hasEnded
       transcript {
         id
         blocks {

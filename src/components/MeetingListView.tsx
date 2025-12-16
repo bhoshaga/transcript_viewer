@@ -1,3 +1,7 @@
+/**
+ * MeetingListView - Used in the Transcript List View (/ route)
+ * Displays all meetings as a grid of cards with skeleton loading state.
+ */
 import React, { memo, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Avatar, AvatarFallback } from "./ui/avatar";
@@ -106,6 +110,7 @@ export const MeetingListView = memo(function MeetingListView({
   onMeetingUpdate,
   isLoading = false
 }: MeetingListViewProps) {
+  console.log('[MeetingListView] Render:', { isLoading, meetingsCount: meetings.length });
 
   // Function to handle archiving (deleting) a meeting
   const handleArchiveMeeting = useCallback(async (event: React.MouseEvent, meetingId: string) => {

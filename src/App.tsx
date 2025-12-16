@@ -16,9 +16,9 @@ import { setAuthToken } from "./lib/graphql/client";
 function AuthTokenSync({ children }: { children: React.ReactNode }) {
   const { token } = useAuth();
 
-  useEffect(() => {
-    setAuthToken(token);
-  }, [token]);
+  // Set token synchronously during render so it's available before child effects run
+  console.log(`[AuthTokenSync] ${Date.now()} Setting token:`, token ? 'present' : 'null');
+  setAuthToken(token);
 
   return <>{children}</>;
 }

@@ -53,11 +53,11 @@ const MainLayout = () => {
       
       <div className="flex flex-1 overflow-hidden">
         {/* Main content */}
-        <div className="main-content flex-1 pl-5 pr-1.5 pb-4 pt-4 overflow-auto">
+        <div className="main-content flex-1 pl-5 pr-5 pb-4 pt-4 overflow-auto">
           <Outlet />
         </div>
 
-        {/* Right sidebar - always visible */}
+        {/* Right sidebar - pr-5 for right edge only, gap handles left spacing */}
         <div className="right-sidebar w-full md:w-[30%] max-w-sm flex-shrink-0 overflow-hidden pt-4 pr-5 pb-4">
           <Card className="h-full flex flex-col overflow-hidden">
             <RightSidebar />

@@ -11,6 +11,8 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
   const { user, loading } = useAuth();
   const location = useLocation();
 
+  console.log('[ProtectedRoute] Render:', { loading, hasUser: !!user });
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">

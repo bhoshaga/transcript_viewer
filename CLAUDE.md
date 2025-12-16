@@ -13,6 +13,13 @@ The build command runs TypeScript compilation and ESLint checks.
 - GraphQL API (`/api/2/graphql`)
 - Geist Sans + Geist Mono fonts
 
+## Page Naming
+
+- **Transcript List View** - The main page showing all meetings as cards (`/` route, `selectedMeeting` is null)
+- **Transcript View** - The detail page showing a specific meeting's transcript (`/t/:id` route, `selectedMeeting` is set)
+
+Both views are rendered by `src/pages/Transcript.tsx` based on whether a meeting is selected.
+
 ## Style Guidelines
 
 - Dark mode only (no light mode support)
