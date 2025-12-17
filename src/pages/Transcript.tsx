@@ -605,7 +605,7 @@ const Transcript = () => {
   };
 
   // Determine if we should show Transcript View layout (either with data or loading skeleton)
-  const showTranscriptViewLayout = selectedMeeting || (meetingIdFromUrl && isInitialLoading);
+  const showTranscriptViewLayout = selectedMeeting || ((meetingIdFromUrl || isSharedView) && isInitialLoading);
 
   return (
     <div className={showTranscriptViewLayout ? "h-full flex flex-col" : "min-h-screen"}>
@@ -983,9 +983,9 @@ const Transcript = () => {
                     </Card>
                 </div>
               </div>
-        ) : (meetingIdFromUrl && isInitialLoading) ? (
+        ) : ((meetingIdFromUrl || isSharedView) && isInitialLoading) ? (
           // ===== TRANSCRIPT VIEW SKELETON =====
-          // Shows skeleton when loading a specific meeting from URL (/t/:id)
+          // Shows skeleton when loading a specific meeting from URL (/t/:id or /s/:shareKey)
           <TranscriptViewSkeleton />
         ) : (
           // ===== TRANSCRIPT LIST VIEW =====

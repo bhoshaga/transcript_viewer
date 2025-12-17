@@ -127,6 +127,9 @@ const RightSidebar = ({}: RightSidebarProps) => {
   const { transcriptData, isDetailView, selectedMeetingId } = useTranscript();
   const meetingId = selectedMeetingId || params.id || "";
   const { user } = useAuth();
+
+  // Debug logging for shared view meetingId
+  console.log('[RightSidebar] meetingId:', meetingId, 'selectedMeetingId:', selectedMeetingId, 'params.id:', params.id);
   
   // Track the meeting name for creating better placeholder messages
   const [currentMeetingName, setCurrentMeetingName] = useState<string | undefined>(undefined);

@@ -59,16 +59,18 @@ export function TranscriptProvider({ children }: { children: ReactNode }) {
   // Update selected meeting ID when URL params change
   useEffect(() => {
     const idFromUrl = getIdFromUrl();
-    if (DEBUG) console.log('[TranscriptContext] URL params check, meetingId from URL:', idFromUrl);
-    
+    const isSharedView = location.pathname.startsWith('/s/');
+    if (DEBUG) console.log('[TranscriptContext] URL params check, meetingId from URL:', idFromUrl, 'isSharedView:', isSharedView);
+
     if (idFromUrl && idFromUrl !== selectedMeetingId) {
       if (DEBUG) console.log('[TranscriptContext] Setting selectedMeetingId from URL params:', idFromUrl);
       setSelectedMeetingId(idFromUrl);
-    } else if (!idFromUrl && selectedMeetingId) {
+    } else if (!idFromUrl && selectedMeetingId && !isSharedView) {
+      // Only clear if NOT on shared view (shared view sets meetingId manually via setSelectedMeetingId)
       if (DEBUG) console.log('[TranscriptContext] Clearing selectedMeetingId as no ID in URL params');
       setSelectedMeetingId(null);
       setMeetingName(null);
-      
+
       // Clear transcript data whenever there's no meeting ID in the URL
       if (DEBUG) console.log('[TranscriptContext] Clearing transcript data when navigating away from detail view');
       setTranscriptData(null);
