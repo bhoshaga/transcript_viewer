@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, ReactNode, useCallback, useMemo, useEffect, useRef } from 'react';
-import { processUserMessage, isConversationTooLong } from '../services/aiService';
+import { processUserMessage, isConversationTooLong, resetAgentRun } from '../services/aiService';
 import { useLocation } from 'react-router-dom';
 
 // Enable this to see detailed logs during development
@@ -196,10 +196,13 @@ export const AIProvider = ({ children }: { children: ReactNode }) => {
   // Clear all messages except the initial greeting
   const clearMessages = useCallback(() => {
     if (DEBUG) console.log("[AIContext] Clearing messages");
-    
+
     // Initialize with empty messages array
     setMessages([]);
-    
+
+    // Reset agent run so next message starts a fresh conversation
+    resetAgentRun();
+
     // Also clear last context when starting a new chat
     setLastContext(null);
     lastContextHashRef.current = null;

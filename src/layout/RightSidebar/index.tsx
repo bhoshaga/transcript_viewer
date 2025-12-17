@@ -477,7 +477,7 @@ return (
         <span className="text-sm font-medium">Ask Questions</span>
         <Button
           variant="ghost"
-          className="text-xs px-2 py-0.5 h-6 bg-white text-black hover:bg-white/90 rounded"
+          className="text-xs px-2 py-0.5 h-6 bg-white text-black hover:bg-gray-200 rounded"
           onClick={handleNewChat}
         >
           New Chat
@@ -500,7 +500,7 @@ return (
                     {message.isUser ? (
                       message.content || ""
                     ) : isProcessing && !message.content ? (
-                      "■"
+                      <span className="inline-block animate-pulse">●</span>
                     ) : (
                       <div className="markdown-simple">
                         {/* Add custom list processing */}
@@ -641,6 +641,7 @@ return (
                             {message.content || ""}
                           </Markdown>
                         )}
+                        {isProcessing && <span className="inline-block animate-pulse ml-0.5">●</span>}
                       </div>
                     )}
                   </div>
