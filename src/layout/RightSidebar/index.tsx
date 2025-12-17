@@ -491,11 +491,10 @@ const RightSidebar = ({}: RightSidebarProps) => {
         <span className="text-sm font-medium">Ask Questions</span>
         <Button
           variant="ghost"
-          className="text-sm flex items-center px-2 py-1 h-7 text-muted-foreground hover:text-foreground"
+          className="text-xs px-2 py-0.5 h-6 bg-white text-black hover:bg-white/90 rounded"
           onClick={handleNewChat}
         >
-          <Plus className="h-3.5 w-3.5 mr-1" />
-          New
+          New Chat
         </Button>
       </div>
       

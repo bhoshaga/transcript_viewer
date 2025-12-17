@@ -1729,6 +1729,199 @@ query GetQuickPrompts {
 
 ---
 
+# Live Meeting Detection
+
+## How It Works
+
+The `hasEnded` field on meetings indicates whether a call is still active or has ended.
+
+**Logic:**
+- During an active call, the Chrome extension sends autosaves every **15 seconds**
+- Each autosave updates the meeting's `updated_at` timestamp and sets `hasEnded: false`
+- When the frontend queries meetings, the server checks:
+  - If `hasEnded` is `true` in DB → meeting has ended
+  - If `updated_at` is older than **16 seconds** → meeting has ended (staleness check)
+  - Otherwise → meeting is **live**
+
+## Querying Live Status
+
+The `hasEnded` field is already included in the Meeting type:
+
+```graphql
+query ListMeetings($type: MeetingType!, $filter: SearchFilterInput!) {
+  meetings(type: $type, filter: $filter) {
+    meetings {
+      id
+      title
+      modified
+      hasEnded    # false = LIVE, true = ended
+    }
+  }
+}
+```
+
+**Response for a LIVE meeting:**
+```json
+{
+  "data": {
+    "meetings": {
+      "meetings": [
+        {
+          "id": "a9033556489a88e0484e",
+          "title": "Meeting kvk-iorx-hiy",
+          "modified": 1734412890000,
+          "hasEnded": false
+        }
+      ]
+    }
+  }
+}
+```
+
+**Response for an ENDED meeting:**
+```json
+{
+  "data": {
+    "meetings": {
+      "meetings": [
+        {
+          "id": "a9033556489a88e0484e",
+          "title": "Meeting kvk-iorx-hiy",
+          "modified": 1734412800000,
+          "hasEnded": true
+        }
+      ]
+    }
+  }
+}
+```
+
+## Frontend Implementation
+
+### React Example - Live Meeting Badge
+
+```typescript
+interface Meeting {
+  id: string;
+  title: string;
+  modified: number;
+  hasEnded: boolean;
+}
+
+function MeetingCard({ meeting }: { meeting: Meeting }) {
+  return (
+    <div className="meeting-card">
+      <h3>{meeting.title}</h3>
+      {!meeting.hasEnded && (
+        <span className="live-badge">
+          🔴 LIVE
+        </span>
+      )}
+    </div>
+  );
+}
+```
+
+### Polling for Live Updates
+
+To keep the live status up-to-date, poll the meetings list:
+
+```typescript
+function useLiveMeetings() {
+  const [meetings, setMeetings] = useState<Meeting[]>([]);
+  const { token } = useAuth();
+
+  useEffect(() => {
+    const fetchMeetings = async () => {
+      const data = await graphqlRequest(token, 'ListMeetings', LIST_MEETINGS_QUERY, {
+        type: 'MyMeetings',
+        filter: {}
+      });
+      setMeetings(data.meetings.meetings);
+    };
+
+    // Initial fetch
+    fetchMeetings();
+
+    // Poll every 10 seconds to catch live status changes
+    const interval = setInterval(fetchMeetings, 10000);
+    return () => clearInterval(interval);
+  }, [token]);
+
+  const liveMeetings = meetings.filter(m => !m.hasEnded);
+  const endedMeetings = meetings.filter(m => m.hasEnded);
+
+  return { liveMeetings, endedMeetings };
+}
+```
+
+### Filter Live Meetings Only
+
+```typescript
+// Get only live meetings
+const liveMeetings = meetings.filter(meeting => !meeting.hasEnded);
+
+// Get only ended meetings
+const endedMeetings = meetings.filter(meeting => meeting.hasEnded);
+
+// Sort with live meetings first
+const sortedMeetings = [...meetings].sort((a, b) => {
+  if (a.hasEnded === b.hasEnded) {
+    return b.modified - a.modified; // Sort by modified desc
+  }
+  return a.hasEnded ? 1 : -1; // Live meetings first
+});
+```
+
+## Important Notes
+
+1. **Staleness Threshold**: A meeting is considered ended if no update received for 16+ seconds
+2. **No Explicit End Signal**: The extension doesn't send an explicit "call ended" event - we detect it via staleness
+3. **Poll Frequency**: Poll at least every 10 seconds to catch transitions from live → ended
+4. **modified vs hasEnded**: Use `hasEnded` for display logic, `modified` for sorting
+
+---
+
+# Generate Meeting Minutes (PDF)
+
+## Endpoint
+
+```
+POST /api/2/minutes/generate
+```
+
+## Request
+
+**Headers:**
+```
+Content-Type: application/json
+Authorization: Bearer <token>
+```
+
+**Body:**
+```json
+{
+  "meetingId": "a5ea703731bb38fe443a"
+}
+```
+
+## Response
+
+**Success (200):** PDF file download
+
+- Content-Type: `application/pdf`
+- Content-Disposition: `attachment; filename="{meeting_title}.pdf"`
+
+**Errors:**
+
+| Status | Response |
+|--------|----------|
+| 401 | `{"error": "Authentication required"}` |
+| 404 | `{"error": "No transcript found for this meeting"}` |
+| 500 | `{"error": "Failed to generate minutes: ..."}` |
+
+---
+
 # Rate Limits
 
 **NOT YET IMPLEMENTED** - No rate limiting currently in place.

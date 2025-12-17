@@ -20,7 +20,6 @@ import {
   X,
   ChevronDown,
   ChevronUp,
-  Mail,
   Link,
   Pencil,
   Copy,
@@ -649,19 +648,44 @@ const Transcript = () => {
                                 variant="ghost"
                                 size="icon"
                                 className="h-8 w-8 text-muted-foreground hover:text-foreground"
-                                onClick={() => toast({ title: "Coming Soon", description: "Generate Minutes feature is in development", variant: "info" })}
+                                onClick={async () => {
+                                  try {
+                                    toast({ title: "Generating...", description: "Creating meeting minutes PDF" });
+                                    const apiUrl = process.env.REACT_APP_GRAPHQL_URL?.replace('/api/2/graphql', '') || '';
+                                    const response = await fetch(`${apiUrl}/api/2/minutes/generate`, {
+                                      method: 'POST',
+                                      headers: {
+                                        'Content-Type': 'application/json',
+                                        'Authorization': `Bearer ${token}`,
+                                      },
+                                      body: JSON.stringify({ meetingId: selectedMeeting.id }),
+                                    });
+
+                                    if (!response.ok) {
+                                      const error = await response.json();
+                                      throw new Error(error.error || 'Failed to generate minutes');
+                                    }
+
+                                    // Download the PDF
+                                    const blob = await response.blob();
+                                    const url = window.URL.createObjectURL(blob);
+                                    const a = document.createElement('a');
+                                    a.href = url;
+                                    a.download = `${selectedMeeting.title || 'meeting'}-minutes.pdf`;
+                                    document.body.appendChild(a);
+                                    a.click();
+                                    window.URL.revokeObjectURL(url);
+                                    document.body.removeChild(a);
+
+                                    toast({ title: "Success", description: "Meeting minutes downloaded" });
+                                  } catch (error) {
+                                    console.error("Failed to generate minutes:", error);
+                                    toast({ variant: "destructive", title: "Error", description: error instanceof Error ? error.message : "Failed to generate minutes" });
+                                  }
+                                }}
                                 title="Generate Minutes"
                               >
                                 <FileText className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8 text-muted-foreground hover:text-foreground"
-                                onClick={() => toast({ title: "Coming Soon", description: "Email feature is in development", variant: "info" })}
-                                title="Email"
-                              >
-                                <Mail className="h-4 w-4" />
                               </Button>
                               <Button
                                 variant="ghost"

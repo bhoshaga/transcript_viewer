@@ -2,7 +2,7 @@
  * MeetingListView - Used in the Transcript List View (/ route)
  * Displays all meetings as a grid of cards with skeleton loading state.
  */
-import React, { memo, useCallback } from "react";
+import React, { memo, useCallback, useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Avatar, AvatarFallback } from "./ui/avatar";
 import { Trash2 } from "lucide-react";
@@ -48,6 +48,21 @@ const formatDuration = (seconds?: number) => {
   }
   return `${secs}s`;
 };
+
+// Memoized live duration component that counts up every second
+const LiveDuration = memo(function LiveDuration({ initialSeconds }: { initialSeconds: number }) {
+  const [seconds, setSeconds] = useState(initialSeconds);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setSeconds(s => s + 1);
+    }, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  return <span className="text-sm font-normal text-foreground">{formatDuration(seconds)}</span>;
+});
+LiveDuration.displayName = "LiveDuration";
 
 // Get first name from full name
 const getFirstName = (name: string) => {
@@ -161,27 +176,29 @@ export const MeetingListView = memo(function MeetingListView({
                   {meeting.platform === 'GOOGLE_MEET' && (
                     <img src="/google-meet.png" alt="Google Meet" className="h-5 w-5 flex-shrink-0" />
                   )}
-                  <CardTitle className="text-base font-semibold leading-tight truncate">{meeting.title}</CardTitle>
+                  <CardTitle className="text-base font-semibold leading-tight truncate max-w-[180px]">{meeting.title}</CardTitle>
                 </div>
-                {/* Right: Duration + Delete/Live */}
-                <div className="flex items-center gap-2 flex-shrink-0">
-                  {meeting.duration && (
-                    <span className="text-base font-semibold text-foreground">{formatDuration(meeting.duration)}</span>
-                  )}
+                {/* Right: Duration + Live/Delete */}
+                <div className="flex items-center gap-2 flex-shrink-0 h-6">
                   {!meeting.hasEnded ? (
-                    <div className="flex items-center gap-1">
+                    <>
+                      <LiveDuration initialSeconds={meeting.duration || 0} />
                       <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-                      <span className="text-[10px] text-foreground">Live</span>
-                    </div>
+                    </>
                   ) : (
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-6 w-6 text-muted-foreground hover:text-white hover:bg-white/10 rounded"
-                      onClick={(e) => handleArchiveMeeting(e, meeting.id)}
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
+                    <>
+                      {meeting.duration && (
+                        <span className="text-sm font-normal text-foreground">{formatDuration(meeting.duration)}</span>
+                      )}
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6 text-muted-foreground/40 hover:text-red-400 hover:bg-red-500/10 rounded"
+                        onClick={(e) => handleArchiveMeeting(e, meeting.id)}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </>
                   )}
                 </div>
               </div>
