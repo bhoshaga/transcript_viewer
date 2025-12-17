@@ -202,13 +202,6 @@ const Transcript = () => {
   const [meetings, setMeetings] = useState<Meeting[] | null>(null);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
 
-  // DEBUG: Log state changes
-  console.log(`[Transcript] ${Date.now()} Render:`, {
-    isInitialLoading,
-    meetingsCount: meetings?.length ?? 'null',
-    hasSelectedMeeting: !!selectedMeeting,
-    hasToken: !!token
-  });
   const [isTranscriptLoading, setIsTranscriptLoading] = useState(false);
   const [messages, setMessages] = useState<TranscriptMessage[]>([]);
   const {
@@ -417,16 +410,16 @@ const Transcript = () => {
     }
   }, [meetingIdFromUrl, navigateToMeetingDetail, setMeetingName, setTranscriptData]);
 
-  const toggleStar = async (id: string) => {
+  const toggleStar = useCallback((id: string) => {
     setMessages(msgs =>
       msgs.map(msg => msg.id === id ? { ...msg, isStarred: !msg.isStarred } : msg)
     );
     // TODO: Call updateMeeting mutation to persist pin state
-  };
+  }, []);
 
-  const deleteMessage = (id: string) => {
+  const deleteMessage = useCallback((id: string) => {
     setMessages(msgs => msgs.filter(msg => msg.id !== id));
-  };
+  }, []);
 
   const handleMeetingsUpdate = (updatedMeetings: Meeting[]) => {
     setMeetings(updatedMeetings);

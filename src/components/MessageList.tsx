@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, memo, useCallback } from "react";
 import { Avatar, AvatarFallback } from "./ui/avatar";
 import { Button } from "./ui/button";
 import { Star } from "lucide-react";
@@ -17,6 +17,91 @@ interface Message {
   isStarred?: boolean;
   isActionItem?: boolean;
 }
+
+// Memoized message item for performance
+interface MessageItemProps {
+  message: Message;
+  onStar: (id: string) => void;
+  hoveredDelete: string | null;
+  searchQuery: string;
+  isSearchResult: boolean;
+  isCurrentSearchResult: boolean;
+}
+
+const MessageItem = memo(function MessageItem({
+  message,
+  onStar,
+  hoveredDelete,
+  searchQuery,
+  isSearchResult,
+  isCurrentSearchResult,
+}: MessageItemProps) {
+  const getNameInitial = (name: string) => {
+    return name.charAt(0).toUpperCase();
+  };
+
+  const highlightSearchText = (text: string, query: string) => {
+    if (!query) return text;
+    const parts = text.split(new RegExp(`(${query})`, 'gi'));
+    return parts.map((part, i) =>
+      part.toLowerCase() === query.toLowerCase()
+        ? <span key={i} className="bg-yellow-200/60 dark:bg-yellow-700/40">{part}</span>
+        : part
+    );
+  };
+
+  return (
+    <div
+      className={cn(
+        "group flex items-start space-x-3 py-2 px-3 rounded-md",
+        message.isStarred && "bg-yellow-100/50 dark:bg-yellow-900/20",
+        hoveredDelete === message.id && "bg-red-500/10",
+        isCurrentSearchResult && "bg-blue-300/20 border border-blue-400",
+        isSearchResult && !isCurrentSearchResult && "bg-blue-200/10"
+      )}
+    >
+      <Avatar className="h-6 w-6 text-xs">
+        <AvatarFallback className={getSpeakerColor(message.speaker)}>{getNameInitial(message.speaker)}</AvatarFallback>
+      </Avatar>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center space-x-2 text-sm">
+          <span className="font-medium">{message.speaker}</span>
+          <span className="text-xs text-muted-foreground">
+            {formatTimestamp(message.timestamp, message.call_time, message.capture_time)}
+          </span>
+        </div>
+        <p className="mt-1.5 text-sm">
+          {searchQuery ?
+            highlightSearchText(message.content, searchQuery) :
+            message.content
+          }
+        </p>
+      </div>
+      <div className={cn(
+        "flex items-center space-x-1 shrink-0",
+        message.isStarred || message.isActionItem ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+      )}>
+        <Button
+          variant="ghost"
+          size="icon"
+          className={cn(
+            "h-6 w-6",
+            message.isStarred
+              ? "text-yellow-500 bg-yellow-100/50 dark:bg-yellow-900/50 opacity-100"
+              : "opacity-0 group-hover:opacity-100"
+          )}
+          onClick={() => onStar(message.id)}
+          title={message.isStarred ? "Unstar this message" : "Star this message"}
+        >
+          <Star
+            className="h-3 w-3"
+            fill={message.isStarred ? "currentColor" : "none"}
+          />
+        </Button>
+      </div>
+    </div>
+  );
+});
 
 interface MessageListProps {
   messages: Message[];
@@ -156,53 +241,15 @@ export function MessageList({
               ref={(el) => {
                 messageRefs.current[index] = el;
               }}
-              className={cn(
-                "group flex items-start space-x-3 py-2 px-3 rounded-md transition-colors",
-                message.isStarred && "bg-yellow-100/50 dark:bg-yellow-900/20",
-                hoveredDelete === message.id && "bg-red-500/10",
-                isCurrentSearchResult && "bg-blue-300/20 border border-blue-400",
-                isSearchResult && !isCurrentSearchResult && "bg-blue-200/10"
-              )}
             >
-              <Avatar className="h-6 w-6 text-xs">
-                <AvatarFallback className={getSpeakerColor(message.speaker)}>{getNameInitial(message.speaker)}</AvatarFallback>
-              </Avatar>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center space-x-2 text-sm">
-                  <span className="font-medium">{message.speaker}</span>
-                  <span className="text-xs text-muted-foreground">
-                    {formatTimestamp(message.timestamp, message.call_time, message.capture_time)}
-                  </span>
-                </div>
-                <p className="mt-1.5 text-sm">
-                  {searchQuery ? 
-                    highlightSearchText(message.content, searchQuery) : 
-                    message.content
-                  }
-                </p>
-              </div>
-              <div className={cn(
-                "flex items-center space-x-1 shrink-0",
-                message.isStarred || message.isActionItem ? "opacity-100" : "opacity-0 group-hover:opacity-100 transition-opacity"
-              )}>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className={cn(
-                    "h-6 w-6",
-                    message.isStarred 
-                      ? "text-yellow-500 bg-yellow-100/50 dark:bg-yellow-900/50 opacity-100"
-                      : "opacity-0 group-hover:opacity-100"
-                  )}
-                  onClick={() => onStar(message.id)}
-                  title={message.isStarred ? "Unstar this message" : "Star this message"}
-                >
-                  <Star 
-                    className="h-3 w-3" 
-                    fill={message.isStarred ? "currentColor" : "none"}
-                  />
-                </Button>
-              </div>
+              <MessageItem
+                message={message}
+                onStar={onStar}
+                hoveredDelete={hoveredDelete}
+                searchQuery={searchQuery}
+                isSearchResult={isSearchResult}
+                isCurrentSearchResult={isCurrentSearchResult}
+              />
             </div>
           );
         })}

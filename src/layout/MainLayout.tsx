@@ -47,6 +47,12 @@ const MainLayout = () => {
     }
   }, [isDragging, sidebarWidth]);
 
+  // Double-click to reset to default width
+  const handleDoubleClick = useCallback(() => {
+    setSidebarWidth(SIDEBAR_DEFAULT_WIDTH);
+    localStorage.setItem(STORAGE_KEY, SIDEBAR_DEFAULT_WIDTH.toString());
+  }, []);
+
   // Attach/detach global mouse listeners
   useEffect(() => {
     if (isDragging) {
@@ -79,7 +85,7 @@ const MainLayout = () => {
                 variant="ghost"
                 onClick={handleBackToMeetingList}
               >
-                MeetScribe
+                Stru Meet
               </Button>
               {meetingName && (
                 <ChevronRight className="h-4 w-4 mx-1 text-muted-foreground flex-shrink-0" />
@@ -111,6 +117,7 @@ const MainLayout = () => {
         <div
           className="w-4 cursor-col-resize flex-shrink-0 flex items-center justify-center group"
           onMouseDown={handleMouseDown}
+          onDoubleClick={handleDoubleClick}
         >
           <div className={`w-px h-full bg-border group-hover:bg-purple-500 transition-colors ${isDragging ? 'bg-purple-500' : ''}`} />
         </div>
