@@ -644,7 +644,9 @@ mutation UpdateMeeting($input: UpdateMeetingInput!) {
 
 # Sharing
 
-## Share Meeting
+**Authorization:** All sharing mutations require the caller to be the **meeting owner**. Returns `success: false` or `null` if not owner.
+
+## Share Meeting (Per-User)
 
 ```graphql
 mutation ShareMeeting($input: ShareMeetingInput!) {
@@ -660,7 +662,7 @@ mutation ShareMeeting($input: ShareMeetingInput!) {
 {
   "input": {
     "meetingId": "a5ea703731bb38fe443a",
-    "sharedWithEmail": "colleague@company.com",
+    "email": "colleague@company.com",
     "accessLevel": "VIEW"
   }
 }
@@ -1123,6 +1125,30 @@ mutation StartAgentRun($input: StartAgentRunInput!) {
 ```
 
 **Important**: After receiving `agentRunId`, subscribe to `AgentRunUpdates` via WebSocket to receive streaming response.
+
+---
+
+## AI Chat on Shared Meetings
+
+For shared transcript views, AI chat works **without authentication** if the meeting is publicly shared.
+
+**Behavior:**
+- **Authenticated user** → Normal flow, no rate limit
+- **Anonymous (no token)** → Allowed if meeting is shared, rate limited to 1 request per 30 seconds per meeting
+
+**Same mutation, no token required:**
+```graphql
+mutation StartAgentRun($input: StartAgentRunInput!) {
+  startAgentRun(input: $input) {
+    success
+    agentRunId
+  }
+}
+```
+
+**Error cases for anonymous access:**
+- `success: false` if meeting is not shared (private)
+- `success: false` if rate limited (wait 30s)
 
 ---
 

@@ -73,6 +73,11 @@ export const GET_MEETING_WITH_TRANSCRIPT = `
       created
       modified
       hasEnded
+      sharingLink {
+        key
+        reach
+        expiry
+      }
       transcript {
         id
         blocks {

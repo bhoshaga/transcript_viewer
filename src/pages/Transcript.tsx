@@ -24,13 +24,14 @@ import {
   Pencil,
   Copy,
   BarChart2,
+  Send,
 } from "lucide-react";
 import { getSpeakerColor } from "../data/meetings";
 import { Meeting, TranscriptBlock } from "../types";
 import { MeetingListView } from "../components/MeetingListView";
 import { MessageList } from "../components/MessageList";
 // ActionItems and SpeakerStats removed - speaker stats now inline in header
-import { listMeetings, getMeetingWithTranscript, archiveMeeting, updateMeeting, generateShareLink, getSharedMeeting } from "../apis/meetings";
+import { listMeetings, getMeetingWithTranscript, archiveMeeting, updateMeeting, generateShareLink, getSharedMeeting, shareMeetingWithEmail } from "../apis/meetings";
 import { getAuthToken } from "../lib/graphql/client";
 import { useNavigate, useLocation, useParams, useMatch } from "react-router-dom";
 import { toast } from '../components/ui/toast';
@@ -214,7 +215,8 @@ const Transcript = () => {
     setTranscriptData,
     navigateToMeetingDetail,
     navigateToMeetingList,
-    setMeetingName
+    setMeetingName,
+    setSelectedMeetingId
   } = useTranscript();
 
   const [hoveredDelete, setHoveredDelete] = useState<string | null>(null);
@@ -236,6 +238,11 @@ const Transcript = () => {
   const [isRenaming, setIsRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState("");
   const [showSpeakerStats, setShowSpeakerStats] = useState(true);
+  const [shareEmail, setShareEmail] = useState("");
+  const [shareLink, setShareLink] = useState("");
+  const [isShareLoading, setIsShareLoading] = useState(false);
+  const [showShareInput, setShowShareInput] = useState(false);
+  const [shareSuccess, setShareSuccess] = useState(false);
 
   const navigate = useNavigate();
   const location = useLocation();
@@ -258,6 +265,7 @@ const Transcript = () => {
         const meeting = await getSharedMeeting(shareKey);
         setSelectedMeeting(meeting as Meeting);
         setMeetingName(meeting.title);
+        setSelectedMeetingId(meeting.id); // Set meeting ID for AI context
 
         if (meeting.transcript?.blocks) {
           const { messages: msgs, speakerStats: stats, transcriptData: tData } = processTranscriptBlocks(
@@ -376,6 +384,7 @@ const Transcript = () => {
     setIsTranscriptLoading(true);
     setSelectedMeeting(meeting);
     setMeetingName(meeting.title);
+    setShareLink(""); // Reset share link when switching meetings
 
     // Navigate to meeting detail URL
     if (!meetingIdFromUrl || meetingIdFromUrl !== meeting.id) {
@@ -527,6 +536,28 @@ const Transcript = () => {
     }
   };
 
+  const handleShareWithEmail = async () => {
+    if (!selectedMeeting || !shareEmail.trim()) return;
+
+    setIsShareLoading(true);
+    try {
+      await shareMeetingWithEmail(selectedMeeting.id, shareEmail.trim(), 'VIEW');
+      setShareSuccess(true);
+      toast({ title: "Shared", description: `Meeting shared with ${shareEmail}` });
+      // Show green state briefly, then close
+      setTimeout(() => {
+        setShareEmail("");
+        setShowShareInput(false);
+        setShareSuccess(false);
+      }, 600);
+    } catch (error) {
+      console.error("Failed to share meeting:", error);
+      toast({ variant: "destructive", title: "Error", description: "Failed to share meeting" });
+    } finally {
+      setIsShareLoading(false);
+    }
+  };
+
   const handleRename = async () => {
     if (!selectedMeeting || !renameValue.trim()) return;
 
@@ -644,81 +675,137 @@ const Transcript = () => {
                             </div>
                             {/* Right side actions */}
                             <div className="flex items-center gap-1">
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8 text-muted-foreground hover:text-foreground"
-                                onClick={async () => {
-                                  try {
-                                    toast({ title: "Generating...", description: "Creating meeting minutes PDF" });
-                                    const apiUrl = process.env.REACT_APP_GRAPHQL_URL?.replace('/api/2/graphql', '') || '';
-                                    const response = await fetch(`${apiUrl}/api/2/minutes/generate`, {
-                                      method: 'POST',
-                                      headers: {
-                                        'Content-Type': 'application/json',
-                                        'Authorization': `Bearer ${token}`,
-                                      },
-                                      body: JSON.stringify({ meetingId: selectedMeeting.id }),
-                                    });
+                              {/* Only show these actions for authenticated users (not shared view) */}
+                              {!isSharedView && (
+                                <>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                                    onClick={async () => {
+                                      try {
+                                        toast({ title: "Generating...", description: "Creating meeting minutes PDF" });
+                                        const apiUrl = process.env.REACT_APP_GRAPHQL_URL?.replace('/api/2/graphql', '') || '';
+                                        const response = await fetch(`${apiUrl}/api/2/minutes/generate`, {
+                                          method: 'POST',
+                                          headers: {
+                                            'Content-Type': 'application/json',
+                                            'Authorization': `Bearer ${token}`,
+                                          },
+                                          body: JSON.stringify({ meetingId: selectedMeeting.id }),
+                                        });
 
-                                    if (!response.ok) {
-                                      const error = await response.json();
-                                      throw new Error(error.error || 'Failed to generate minutes');
-                                    }
+                                        if (!response.ok) {
+                                          const error = await response.json();
+                                          throw new Error(error.error || 'Failed to generate minutes');
+                                        }
 
-                                    // Download the PDF
-                                    const blob = await response.blob();
-                                    const url = window.URL.createObjectURL(blob);
-                                    const a = document.createElement('a');
-                                    a.href = url;
-                                    a.download = `${selectedMeeting.title || 'meeting'}-minutes.pdf`;
-                                    document.body.appendChild(a);
-                                    a.click();
-                                    window.URL.revokeObjectURL(url);
-                                    document.body.removeChild(a);
+                                        // Download the PDF
+                                        const blob = await response.blob();
+                                        const url = window.URL.createObjectURL(blob);
+                                        const a = document.createElement('a');
+                                        a.href = url;
+                                        a.download = `${selectedMeeting.title || 'meeting'}-minutes.pdf`;
+                                        document.body.appendChild(a);
+                                        a.click();
+                                        window.URL.revokeObjectURL(url);
+                                        document.body.removeChild(a);
 
-                                    toast({ title: "Success", description: "Meeting minutes downloaded" });
-                                  } catch (error) {
-                                    console.error("Failed to generate minutes:", error);
-                                    toast({ variant: "destructive", title: "Error", description: error instanceof Error ? error.message : "Failed to generate minutes" });
-                                  }
-                                }}
-                                title="Generate Minutes"
-                              >
-                                <FileText className="h-4 w-4" />
-                              </Button>
+                                        toast({ title: "Success", description: "Meeting minutes downloaded" });
+                                      } catch (error) {
+                                        console.error("Failed to generate minutes:", error);
+                                        toast({ variant: "destructive", title: "Error", description: error instanceof Error ? error.message : "Failed to generate minutes" });
+                                      }
+                                    }}
+                                    title="Generate Minutes"
+                                  >
+                                    <FileText className="h-4 w-4" />
+                                  </Button>
+                                  {/* Public Link - one click copy, blue if shared */}
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className={`h-8 w-8 ${selectedMeeting.sharingLink?.reach !== 'PRIVATE' && selectedMeeting.sharingLink?.key ? 'text-blue-400 hover:text-blue-300' : 'text-muted-foreground hover:text-foreground'}`}
+                                    title={selectedMeeting.sharingLink?.reach !== 'PRIVATE' ? "Copy link" : "Create & copy link"}
+                                    onClick={async () => {
+                                      try {
+                                        if (selectedMeeting.sharingLink?.key) {
+                                          const link = `${window.location.origin}/s/${selectedMeeting.sharingLink.key}`;
+                                          navigator.clipboard.writeText(link);
+                                          toast({ title: "Copied!", description: "Link copied to clipboard" });
+                                        } else {
+                                          const result = await generateShareLink(selectedMeeting.id);
+                                          const link = `${window.location.origin}/s/${result.key}`;
+                                          setSelectedMeeting({
+                                            ...selectedMeeting,
+                                            sharingLink: { key: result.key, reach: 'ANYONE_WITH_LINK', expiry: 0 }
+                                          });
+                                          navigator.clipboard.writeText(link);
+                                          toast({ title: "Link created!", description: "Link copied to clipboard" });
+                                        }
+                                      } catch (error) {
+                                        console.error("Failed to generate share link:", error);
+                                        toast({ variant: "destructive", title: "Error", description: "Failed to create link" });
+                                      }
+                                    }}
+                                  >
+                                    <Link className="h-4 w-4" />
+                                  </Button>
+                                  {/* Share Access - Users icon + inline sliding input */}
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className={`h-8 w-8 ${showShareInput ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+                                    title="Share access"
+                                    onClick={() => {
+                                      setShowShareInput(!showShareInput);
+                                      if (showShareInput) setShareEmail("");
+                                    }}
+                                  >
+                                    <Users className="h-4 w-4" />
+                                  </Button>
+                                  <div
+                                    className={`overflow-hidden transition-all duration-200 ease-out ${showShareInput ? 'w-48 opacity-100' : 'w-0 opacity-0'}`}
+                                  >
+                                    <div className="relative flex items-center">
+                                      <input
+                                        ref={(input) => input && showShareInput && input.focus()}
+                                        type="email"
+                                        placeholder="email"
+                                        value={shareEmail}
+                                        onChange={(e) => setShareEmail(e.target.value)}
+                                        className={`w-full h-8 pl-2 pr-7 text-sm bg-transparent border rounded-lg outline-none focus:ring-0 placeholder:text-muted-foreground/50 transition-colors ${shareSuccess ? 'border-green-400 text-green-400' : 'border-white/30 focus:border-white/30'}`}
+                                        onKeyDown={(e) => {
+                                          if (e.key === 'Enter' && shareEmail.trim()) {
+                                            e.preventDefault();
+                                            handleShareWithEmail();
+                                          }
+                                          if (e.key === 'Escape') {
+                                            setShowShareInput(false);
+                                            setShareEmail("");
+                                          }
+                                        }}
+                                      />
+                                      <span className={`absolute right-2 text-xs transition-colors ${shareSuccess ? 'text-green-400' : shareEmail.trim() ? 'text-foreground' : 'text-muted-foreground/40'}`}>
+                                        {shareSuccess ? '✓' : '↵'}
+                                      </span>
+                                    </div>
+                                  </div>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                                    onClick={handleStartRename}
+                                    title="Rename"
+                                  >
+                                    <Pencil className="h-4 w-4" />
+                                  </Button>
+                                </>
+                              )}
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                className="h-8 w-8 text-muted-foreground hover:text-foreground"
-                                onClick={async () => {
-                                  try {
-                                    const result = await generateShareLink(selectedMeeting.id);
-                                    const shareUrl = `${window.location.origin}/s/${result.key}`;
-                                    navigator.clipboard.writeText(shareUrl);
-                                    toast({ title: "Link Copied", description: "Share link copied to clipboard" });
-                                  } catch (error) {
-                                    console.error("Failed to generate share link:", error);
-                                    toast({ variant: "destructive", title: "Error", description: "Failed to generate share link" });
-                                  }
-                                }}
-                                title="Copy Share Link"
-                              >
-                                <Link className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8 text-muted-foreground hover:text-foreground"
-                                onClick={handleStartRename}
-                                title="Rename"
-                              >
-                                <Pencil className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className={`h-8 w-8 ${showSpeakerStats ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+                                className={`h-8 w-8 ${showSpeakerStats ? 'text-cyan-400 hover:text-cyan-300' : 'text-muted-foreground hover:text-foreground'}`}
                                 onClick={() => setShowSpeakerStats(!showSpeakerStats)}
                                 title={showSpeakerStats ? "Hide Speaker Stats" : "Show Speaker Stats"}
                               >
@@ -818,30 +905,30 @@ const Transcript = () => {
                             <Copy className="h-3.5 w-3.5" />
                           </Button>
                         </div>
-                        <div className="w-64">
+                        <div className="w-52">
                           <div className="relative flex items-center">
                             {searchQuery ? (
-                              <X className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground cursor-pointer hover:text-foreground" onClick={clearSearch} />
+                              <X className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground cursor-pointer hover:text-foreground" onClick={clearSearch} />
                             ) : (
-                              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                              <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
                             )}
                             <Input
                               placeholder="Search..."
-                              className="pl-10 rounded-lg focus:ring-0 focus:outline-none focus-visible:ring-0 border border-white/20 bg-secondary"
+                              className="h-8 pl-8 pr-2 text-sm rounded-lg focus:ring-0 focus:outline-none focus-visible:ring-0 border border-white/20 bg-secondary"
                               value={searchQuery}
                               onChange={(e) => setSearchQuery(e.target.value)}
                               onKeyDown={(e) => e.key === 'Escape' && clearSearch()}
                             />
                             {searchQuery && (
-                              <div className="absolute right-2 flex items-center space-x-1">
-                                <span className="text-xs text-muted-foreground">
+                              <div className="absolute right-1 flex items-center space-x-0.5">
+                                <span className="text-[10px] text-muted-foreground">
                                   {searchResults.length > 0 ? `${currentSearchIndex + 1}/${searchResults.length}` : "0/0"}
                                 </span>
-                                <Button variant="ghost" size="icon" className="h-6 w-6" disabled={searchResults.length === 0} onClick={goToPreviousSearchResult}>
-                                  <ChevronUp className="h-3 w-3" />
+                                <Button variant="ghost" size="icon" className="h-5 w-5" disabled={searchResults.length === 0} onClick={goToPreviousSearchResult}>
+                                  <ChevronUp className="h-2.5 w-2.5" />
                                 </Button>
-                                <Button variant="ghost" size="icon" className="h-6 w-6" disabled={searchResults.length === 0} onClick={goToNextSearchResult}>
-                                  <ChevronDown className="h-3 w-3" />
+                                <Button variant="ghost" size="icon" className="h-5 w-5" disabled={searchResults.length === 0} onClick={goToNextSearchResult}>
+                                  <ChevronDown className="h-2.5 w-2.5" />
                                 </Button>
                               </div>
                             )}

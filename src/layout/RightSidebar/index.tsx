@@ -124,8 +124,8 @@ const RightSidebar = ({}: RightSidebarProps) => {
   const location = useLocation();
   const navigate = useNavigate();
   const params = useParams<{ id?: string }>();
-  const meetingId = params.id || "";
-  const { transcriptData, isDetailView } = useTranscript();
+  const { transcriptData, isDetailView, selectedMeetingId } = useTranscript();
+  const meetingId = selectedMeetingId || params.id || "";
   const { user } = useAuth();
   
   // Track the meeting name for creating better placeholder messages
@@ -247,10 +247,11 @@ const RightSidebar = ({}: RightSidebarProps) => {
   // Initialize context on mount based on URL
   useEffect(() => {
     // On first mount, determine the context based on location
-    const isOnMeetingDetailPage = location.pathname.startsWith('/t/');
-    
+    const isOnMeetingDetailPage = location.pathname.startsWith('/t/') || location.pathname.startsWith('/s/');
+    const isSharedView = location.pathname.startsWith('/s/');
+
     if (DEBUG) console.log(`[RightSidebar] Initial context: IsDetail=${isOnMeetingDetailPage}, MeetingID=${meetingId}`);
-    
+
     // Set appropriate suggestions based on path
     if (isOnMeetingDetailPage && meetingId) {
       const suggestionParams = {
@@ -259,20 +260,22 @@ const RightSidebar = ({}: RightSidebarProps) => {
       };
       const detailSuggestions = getContextualSuggestions(suggestionParams);
       setSuggestions(detailSuggestions);
-    } else {
+    } else if (!isSharedView) {
+      // Only show list suggestions for non-shared views
       const listSuggestionParams = {
         page: 'transcript-list'
       };
       const listSuggestions = getContextualSuggestions(listSuggestionParams);
       setSuggestions(listSuggestions);
     }
+    // For shared view without meetingId yet, don't set suggestions (wait for meeting to load)
   }, [location.pathname, meetingId]);
 
   // Add this after the existing initializing effect that runs on mount
   // This effect specifically handles URL path changes
   useEffect(() => {
     // When the user navigates to a meeting detail page
-    if (location.pathname.startsWith('/t/') && meetingId) {
+    if ((location.pathname.startsWith('/t/') || location.pathname.startsWith('/s/')) && meetingId) {
       if (DEBUG) console.log(`[RightSidebar] URL changed to meeting detail: ${meetingId}`);
       
       // Immediately update suggestions for the transcript detail view
@@ -313,7 +316,7 @@ const RightSidebar = ({}: RightSidebarProps) => {
   // Get the current page context based on URL and state
   const getCurrentContext = useCallback((): CurrentContextType => {
     // Check if we're in detail view with a meeting ID in the URL
-    const isOnMeetingDetailPage = location.pathname.startsWith('/t/');
+    const isOnMeetingDetailPage = location.pathname.startsWith('/t/') || location.pathname.startsWith('/s/');
     // Check if we have actual transcript data available
     const hasTranscriptData = !!transcriptData && transcriptData.length > 0;
     
@@ -467,24 +470,7 @@ const RightSidebar = ({}: RightSidebarProps) => {
     }
   };
 
-  // If not logged in, show sign in prompt
-  if (!user) {
-    return (
-      <div className="h-full flex flex-col">
-        <div className="py-2 px-4 border-b border-border">
-          <span className="text-sm font-medium">Ask Questions</span>
-        </div>
-        <div className="flex-1 flex flex-col items-center justify-center p-4 text-center">
-          <p className="text-sm text-muted-foreground mb-4">Sign in to use AI chat</p>
-          <Button onClick={() => navigate('/login')} variant="outline" size="sm">
-            Sign in
-          </Button>
-        </div>
-      </div>
-    );
-  }
-
-  return (
+return (
     <div className="h-full flex flex-col">
       {/* Toolbar */}
       <div className="py-2 px-4 border-b border-border flex items-center justify-between">

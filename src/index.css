@@ -12,6 +12,7 @@
 
 @layer base {
   :root {
+    color-scheme: dark;
     --background: 0 0% 9%;
     --foreground: 0 0% 98%;
     --card: 0 0% 12%;
@@ -113,25 +114,49 @@ code {
 }
 
 /* Visible scrollbar for transcript area */
+.show-scrollbar {
+  /* Force dark mode scrollbar */
+  color-scheme: dark;
+  /* Firefox */
+  scrollbar-width: thin !important;
+  scrollbar-color: rgba(166, 173, 186, 0.5) rgba(0, 0, 0, 0.1) !important;
+  /* Safari smooth scrolling */
+  -webkit-overflow-scrolling: touch;
+  /* Ensure scrollbar shows */
+  overflow-y: scroll !important;
+}
+
 .show-scrollbar::-webkit-scrollbar {
   width: 8px !important;
+  height: 8px !important;
   display: block !important;
+  -webkit-appearance: none;
 }
 
 .show-scrollbar::-webkit-scrollbar-track {
   background: rgba(0, 0, 0, 0.1) !important;
+  border-radius: 4px;
 }
 
 .show-scrollbar::-webkit-scrollbar-thumb {
   background-color: rgba(166, 173, 186, 0.5) !important;
-  border-radius: 20px !important;
+  border-radius: 4px !important;
+  min-height: 40px;
 }
 
 .show-scrollbar::-webkit-scrollbar-thumb:hover {
   background-color: rgba(166, 173, 186, 0.7) !important;
 }
 
-.show-scrollbar {
-  scrollbar-width: thin !important;
-  scrollbar-color: rgba(166, 173, 186, 0.5) rgba(0, 0, 0, 0.1) !important;
+/* Safari-specific fix */
+@supports (-webkit-touch-callout: none) {
+  .show-scrollbar::-webkit-scrollbar {
+    width: 8px !important;
+    background-color: rgba(0, 0, 0, 0.1);
+  }
+
+  .show-scrollbar::-webkit-scrollbar-thumb {
+    background-color: rgba(166, 173, 186, 0.5) !important;
+    border-radius: 4px;
+  }
 }

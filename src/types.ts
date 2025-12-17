@@ -57,6 +57,12 @@ export interface Label {
   filters?: unknown;
 }
 
+export interface SharingLink {
+  key: string;
+  reach: 'PRIVATE' | 'ANYONE_WITH_LINK' | 'PUBLIC';
+  expiry: number;
+}
+
 export interface Meeting {
   id: string;
   title: string;
@@ -75,6 +81,7 @@ export interface Meeting {
   hasEnded?: boolean;
   hasAiOutputs?: boolean;
   transcript?: Transcript;
+  sharingLink?: SharingLink;
 }
 
 // -----------------------------------------------------------------------------
