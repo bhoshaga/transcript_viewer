@@ -106,8 +106,6 @@ export const AIProvider = ({ children }: { children: ReactNode }) => {
           hasTranscriptData: !!context?.transcriptData,
           transcriptLength: context?.transcriptData?.length || 0
         });
-      } else {
-        console.log(`[AIContext] Context updated (${context?.page}, ${context?.transcriptData?.length || 0} msgs)`);
       }
       
       // Store the context for future reference

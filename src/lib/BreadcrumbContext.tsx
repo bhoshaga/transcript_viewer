@@ -17,13 +17,11 @@ export const BreadcrumbProvider: React.FC<{ children: ReactNode }> = ({ children
 
   // Store the handler function
   const registerNavigateHandler = useCallback((handler: () => void) => {
-    console.log("Registering navigate handler");
     setNavigateHandler(() => handler);
   }, []);
 
   // Call the stored handler function
   const navigateToMeetingList = useCallback(() => {
-    console.log("Navigate to meeting list called", !!navigateHandler);
     if (navigateHandler) {
       navigateHandler();
     }

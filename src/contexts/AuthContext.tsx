@@ -30,28 +30,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Handle redirect result on mount
   useEffect(() => {
-    console.log('[Auth] Checking redirect result...');
     getRedirectResult(auth)
       .then(async (result) => {
-        console.log('[Auth] Redirect result:', result);
         if (result?.user) {
-          console.log('[Auth] Redirect result user:', result.user.email);
           setUser(result.user);
           const idToken = await result.user.getIdToken();
           setToken(idToken);
           setLoading(false);
-        } else {
-          console.log('[Auth] No redirect result (user came directly to page)');
         }
       })
       .catch((error) => {
-        console.error('[Auth] Redirect result error:', error.code, error.message);
+        console.error('[Auth] Redirect error:', error.code);
       });
   }, []);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      console.log('[Auth] Auth state changed:', firebaseUser?.email || 'null');
       setUser(firebaseUser);
       if (firebaseUser) {
         const idToken = await firebaseUser.getIdToken();
