@@ -943,7 +943,7 @@ const Transcript = () => {
                           </div>
                         </div>
                       </CardHeader>
-                      <div className={`flex-1 pb-3 px-3 ${messages.length > 0 ? 'overflow-y-auto show-scrollbar' : 'overflow-hidden'}`}>
+                      <div className={`flex-1 pb-3 px-3 overflow-x-hidden ${messages.length > 0 ? 'overflow-y-auto show-scrollbar' : 'overflow-hidden'}`}>
                         <div className="h-full">
                           {messages.length > 0 ? (
                             <MessageList

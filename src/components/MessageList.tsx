@@ -70,7 +70,7 @@ const MessageItem = memo(function MessageItem({
             {formatTimestamp(message.timestamp, message.call_time, message.capture_time)}
           </span>
         </div>
-        <p className="mt-1.5 text-sm">
+        <p className="mt-1.5 text-sm break-words">
           {searchQuery ?
             highlightSearchText(message.content, searchQuery) :
             message.content
