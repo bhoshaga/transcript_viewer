@@ -26,6 +26,7 @@ import {
   BarChart2,
   Send,
   MessageCircleMore,
+  Check,
 } from "lucide-react";
 import { getSpeakerColor } from "../data/meetings";
 import { Meeting, TranscriptBlock } from "../types";
@@ -237,6 +238,26 @@ const Transcript = () => {
   const [isShareLoading, setIsShareLoading] = useState(false);
   const [showShareInput, setShowShareInput] = useState(false);
   const [shareSuccess, setShareSuccess] = useState(false);
+
+  // Minutes generation state
+  const [isGeneratingMinutes, setIsGeneratingMinutes] = useState(false);
+  const [minutesCountdown, setMinutesCountdown] = useState(10);
+  const [minutesSuccess, setMinutesSuccess] = useState(false);
+  const minutesIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Countdown effect for minutes generation
+  useEffect(() => {
+    if (isGeneratingMinutes && minutesCountdown > 0) {
+      minutesIntervalRef.current = setTimeout(() => {
+        setMinutesCountdown(prev => prev - 1);
+      }, 1000);
+    }
+    return () => {
+      if (minutesIntervalRef.current) {
+        clearTimeout(minutesIntervalRef.current);
+      }
+    };
+  }, [isGeneratingMinutes, minutesCountdown]);
 
   const navigate = useNavigate();
   const location = useLocation();
@@ -593,9 +614,17 @@ const Transcript = () => {
   // Format duration display
   const formatDuration = (seconds?: number) => {
     if (!seconds) return '';
-    const mins = Math.floor(seconds / 60);
+    const hrs = Math.floor(seconds / 3600);
+    const mins = Math.floor((seconds % 3600) / 60);
     const secs = seconds % 60;
-    return `${mins}m ${secs}s`;
+
+    if (hrs > 0) {
+      return mins > 0 ? `${hrs}h ${mins}m` : `${hrs}h`;
+    }
+    if (mins > 0) {
+      return secs > 0 ? `${mins}m ${secs}s` : `${mins}m`;
+    }
+    return `${secs}s`;
   };
 
   // Determine if we should show Transcript View layout (either with data or loading skeleton)
@@ -677,9 +706,15 @@ const Transcript = () => {
                                     variant="ghost"
                                     size="icon"
                                     className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                                    disabled={isGeneratingMinutes}
                                     onClick={async () => {
+                                      if (isGeneratingMinutes) return;
+
                                       try {
-                                        toast({ title: "Generating...", description: "Creating meeting minutes PDF" });
+                                        setIsGeneratingMinutes(true);
+                                        setMinutesCountdown(10);
+                                        setMinutesSuccess(false);
+
                                         const apiUrl = process.env.REACT_APP_GRAPHQL_URL?.replace('/api/2/graphql', '') || '';
                                         const response = await fetch(`${apiUrl}/api/2/minutes/generate`, {
                                           method: 'POST',
@@ -706,15 +741,32 @@ const Transcript = () => {
                                         window.URL.revokeObjectURL(url);
                                         document.body.removeChild(a);
 
-                                        toast({ title: "Success", description: "Meeting minutes downloaded" });
+                                        // Show success checkmark
+                                        setMinutesSuccess(true);
+                                        setIsGeneratingMinutes(false);
+
+                                        // Reset after 2 seconds
+                                        setTimeout(() => {
+                                          setMinutesSuccess(false);
+                                        }, 2000);
                                       } catch (error) {
                                         console.error("Failed to generate minutes:", error);
                                         toast({ variant: "destructive", title: "Error", description: error instanceof Error ? error.message : "Failed to generate minutes" });
+                                        setIsGeneratingMinutes(false);
+                                        setMinutesSuccess(false);
                                       }
                                     }}
                                     title="Generate Minutes"
                                   >
-                                    <FileText className="h-4 w-4" />
+                                    {minutesSuccess ? (
+                                      <Check className="h-4 w-4 text-green-500" />
+                                    ) : isGeneratingMinutes ? (
+                                      <div className="h-5 w-5 rounded-full border-2 border-muted-foreground flex items-center justify-center">
+                                        <span className="text-[10px] font-medium">{minutesCountdown}</span>
+                                      </div>
+                                    ) : (
+                                      <FileText className="h-4 w-4" />
+                                    )}
                                   </Button>
                                   {/* Public Link - one click copy, blue if shared */}
                                   <Button
@@ -949,7 +1001,6 @@ const Transcript = () => {
                             <MessageList
                               messages={messages}
                               hoveredDelete={hoveredDelete}
-                              onStar={toggleStar}
                               onDelete={deleteMessage}
                               onHoverDelete={setHoveredDelete}
                               searchQuery={debouncedSearchQuery}

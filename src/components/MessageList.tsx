@@ -1,7 +1,5 @@
 import React, { useEffect, useRef, memo, useCallback } from "react";
 import { Avatar, AvatarFallback } from "./ui/avatar";
-import { Button } from "./ui/button";
-import { Star } from "lucide-react";
 import { getSpeakerColor } from "../data/meetings";
 import { cn, formatTimestamp } from "../lib/utils";
 import "./shimmer.css";
@@ -21,7 +19,6 @@ interface Message {
 // Memoized message item for performance
 interface MessageItemProps {
   message: Message;
-  onStar: (id: string) => void;
   hoveredDelete: string | null;
   searchQuery: string;
   isSearchResult: boolean;
@@ -30,7 +27,6 @@ interface MessageItemProps {
 
 const MessageItem = memo(function MessageItem({
   message,
-  onStar,
   hoveredDelete,
   searchQuery,
   isSearchResult,
@@ -54,7 +50,6 @@ const MessageItem = memo(function MessageItem({
     <div
       className={cn(
         "group flex items-start space-x-3 py-2 rounded-md",
-        message.isStarred && "bg-yellow-100/50 dark:bg-yellow-900/20",
         hoveredDelete === message.id && "bg-red-500/10",
         isCurrentSearchResult && "bg-blue-300/20 border border-blue-400",
         isSearchResult && !isCurrentSearchResult && "bg-blue-200/10"
@@ -77,28 +72,6 @@ const MessageItem = memo(function MessageItem({
           }
         </p>
       </div>
-      <div className={cn(
-        "flex items-center space-x-1 shrink-0",
-        message.isStarred || message.isActionItem ? "opacity-100" : "opacity-0 group-hover:opacity-100"
-      )}>
-        <Button
-          variant="ghost"
-          size="icon"
-          className={cn(
-            "h-6 w-6",
-            message.isStarred
-              ? "text-yellow-500 bg-yellow-100/50 dark:bg-yellow-900/50 opacity-100"
-              : "opacity-0 group-hover:opacity-100"
-          )}
-          onClick={() => onStar(message.id)}
-          title={message.isStarred ? "Unstar this message" : "Star this message"}
-        >
-          <Star
-            className="h-3 w-3"
-            fill={message.isStarred ? "currentColor" : "none"}
-          />
-        </Button>
-      </div>
     </div>
   );
 });
@@ -106,7 +79,6 @@ const MessageItem = memo(function MessageItem({
 interface MessageListProps {
   messages: Message[];
   hoveredDelete: string | null;
-  onStar: (id: string) => void;
   onDelete: (id: string) => void;
   onHoverDelete: (id: string | null) => void;
   searchQuery?: string;
@@ -198,7 +170,6 @@ const MessageSkeleton = () => {
 export function MessageList({
   messages,
   hoveredDelete,
-  onStar,
   onDelete,
   onHoverDelete,
   searchQuery = "",
@@ -244,7 +215,6 @@ export function MessageList({
             >
               <MessageItem
                 message={message}
-                onStar={onStar}
                 hoveredDelete={hoveredDelete}
                 searchQuery={searchQuery}
                 isSearchResult={isSearchResult}
