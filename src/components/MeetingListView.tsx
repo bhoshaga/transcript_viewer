@@ -295,6 +295,37 @@ export const MeetingListView = memo(function MeetingListView({
                     </Avatar>
                   )}
                 </div>
+                {/* Shared with avatars - only for owners */}
+                {meeting.shares && meeting.shares.length > 0 && (
+                  <div className="relative group/shares ml-auto">
+                    <div className="flex -space-x-1.5">
+                      {meeting.shares.slice(0, 3).map((share, i) => (
+                        <Avatar
+                          key={share.id}
+                          className="h-6 w-6 border-2 border-green-500/50"
+                          style={{ zIndex: i + 1 }}
+                        >
+                          {share.photoUrl && (
+                            <AvatarImage src={share.photoUrl} alt={share.displayName || 'Shared user'} />
+                          )}
+                          <AvatarFallback className="text-[10px] bg-green-500/20 text-green-400">
+                            {share.displayName?.[0] || '?'}
+                          </AvatarFallback>
+                        </Avatar>
+                      ))}
+                      {meeting.shares.length > 3 && (
+                        <Avatar className="h-6 w-6 border-2 border-green-500/50 bg-green-500/20">
+                          <AvatarFallback className="text-[10px] text-green-400">
+                            +{meeting.shares.length - 3}
+                          </AvatarFallback>
+                        </Avatar>
+                      )}
+                    </div>
+                    <div className="absolute bottom-full right-0 mb-1 px-2 py-1 bg-popover border border-border rounded text-xs whitespace-nowrap opacity-0 group-hover/shares:opacity-100 transition-opacity pointer-events-none z-10">
+                      Shared with {meeting.shares.map(s => s.displayName || 'someone').join(', ')}
+                    </div>
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>

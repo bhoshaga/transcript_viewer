@@ -508,6 +508,12 @@ query ListMeetings(
       modified
       hasEnded
       hasAiOutputs
+      shares {
+        id
+        displayName
+        photoUrl
+        accessLevel
+      }
     }
   }
 }
@@ -561,13 +567,32 @@ query ListMeetings(
           "created": 1765848765845,
           "modified": 1765848836246,
           "hasEnded": true,
-          "hasAiOutputs": false
+          "hasAiOutputs": false,
+          "shares": [
+            {
+              "id": "share_abc123",
+              "displayName": "Jane Smith",
+              "photoUrl": "https://...",
+              "accessLevel": "VIEW"
+            },
+            {
+              "id": "share_def456",
+              "displayName": null,
+              "photoUrl": null,
+              "accessLevel": "EDIT"
+            }
+          ]
         }
       ]
     }
   }
 }
 ```
+
+**Notes**:
+- `shares` shows users the meeting has been shared with (only populated for `MyMeetings`, not `SharedWithMe`)
+- Use `shares` to display shared-with avatars on meeting cards (for owners)
+- `displayName` and `photoUrl` may be `null` if the recipient hasn't signed up yet
 
 ---
 

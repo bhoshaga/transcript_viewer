@@ -70,6 +70,13 @@ export interface SharedBy {
   photoUrl?: string;
 }
 
+export interface MeetingShareSummary {
+  id: string;
+  displayName?: string;
+  photoUrl?: string;
+  accessLevel: string;
+}
+
 export interface Meeting {
   id: string;
   title: string;
@@ -84,6 +91,7 @@ export interface Meeting {
   access?: AccessLevel;
   accessType?: AccessType;
   sharedBy?: SharedBy;
+  shares?: MeetingShareSummary[];
   duration?: number;
   speechDuration?: number;
   hasEnded?: boolean;

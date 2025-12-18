@@ -35,6 +35,7 @@ export const LIST_MEETINGS = `
         access
         accessType
         sharedBy { userId displayName email photoUrl }
+        shares { id displayName photoUrl accessLevel }
         duration
         speechDuration
         created
@@ -56,6 +57,7 @@ export const GET_MEETING = `
         name
         analytics { textLength }
       }
+      accessType
       labels { id name color }
       permissions { canEdit canDelete canShare }
     }
@@ -69,6 +71,7 @@ export const GET_MEETING_WITH_TRANSCRIPT = `
       title
       platform
       participants { name analytics { textLength } }
+      accessType
       duration
       speechDuration
       created

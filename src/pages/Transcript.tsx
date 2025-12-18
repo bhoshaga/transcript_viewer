@@ -622,6 +622,10 @@ const Transcript = () => {
     // Fire API call in background
     try {
       await shareMeetingWithEmail(selectedMeeting.id, emailToShare, 'VIEW');
+
+      // Refresh meetings list to get updated shares
+      const updatedMeetings = await fetchAllMeetings();
+      setMeetings(updatedMeetings);
     } catch (error) {
       console.error("Failed to share meeting:", error);
       toast({ variant: "destructive", title: "Share failed", description: `Could not share with ${emailToShare}. Please try again.` });
