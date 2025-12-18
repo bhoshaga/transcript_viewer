@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
-import { ArrowUpCircle, Loader2, Plus } from "lucide-react";
+import { ArrowUpCircle, Loader2, Plus, X } from "lucide-react";
 import { useLocation, useParams, useNavigate } from "react-router-dom";
 import { useAI } from "../../lib/AIContext";
 import { useTranscript } from "../../lib/TranscriptContext";
@@ -475,13 +475,23 @@ return (
       {/* Toolbar */}
       <div className="py-2 px-4 border-b border-border flex items-center justify-between">
         <span className="text-sm font-medium">Ask Questions</span>
-        <Button
-          variant="ghost"
-          className="text-xs px-2 py-0.5 h-6 bg-white text-black hover:bg-gray-200 rounded"
-          onClick={handleNewChat}
-        >
-          New Chat
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="ghost"
+            className="text-xs px-2 py-0.5 h-6 bg-white text-black hover:bg-gray-200 hover:text-black rounded"
+            onClick={handleNewChat}
+          >
+            New Chat
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-6 w-6 md:hidden"
+            onClick={() => window.dispatchEvent(new CustomEvent('closeChatDrawer'))}
+          >
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
       </div>
       
       {/* Main chat area */}

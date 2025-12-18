@@ -4,7 +4,7 @@ import { Outlet } from "react-router-dom";
 import { Button } from "../components/ui/button";
 import { Card } from "../components/ui/card";
 import { UserMenu } from "../components/UserMenu";
-import { ChevronRight, X } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 import { useBreadcrumb } from "../lib/BreadcrumbContext";
 import { useTranscript } from "../lib/TranscriptContext";
 
@@ -30,11 +30,16 @@ const MainLayout = () => {
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
-  // Listen for chat drawer open event
+  // Listen for chat drawer open/close events
   useEffect(() => {
     const handleOpenChat = () => setIsChatOpen(true);
+    const handleCloseChat = () => setIsChatOpen(false);
     window.addEventListener('openChatDrawer', handleOpenChat);
-    return () => window.removeEventListener('openChatDrawer', handleOpenChat);
+    window.addEventListener('closeChatDrawer', handleCloseChat);
+    return () => {
+      window.removeEventListener('openChatDrawer', handleOpenChat);
+      window.removeEventListener('closeChatDrawer', handleCloseChat);
+    };
   }, []);
 
   // Resizable sidebar state
@@ -112,8 +117,8 @@ const MainLayout = () => {
             </div>
 
             {meetingName && (
-              <div className="flex items-center">
-                <span className="text-foreground py-1 px-2 h-6 flex items-center text-sm font-medium">
+              <div className="flex items-center min-w-0 flex-1">
+                <span className="text-foreground py-1 px-2 h-6 flex items-center text-sm font-medium truncate max-w-[200px] md:max-w-[400px]">
                   {meetingName}
                 </span>
               </div>
@@ -159,22 +164,7 @@ const MainLayout = () => {
       {/* Mobile: Full-screen chat drawer */}
       {isMobile && isChatOpen && (
         <div className="fixed inset-0 z-50 bg-background flex flex-col">
-          {/* Drawer header */}
-          <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-            <span className="font-medium">Chat</span>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setIsChatOpen(false)}
-              className="h-8 w-8"
-            >
-              <X className="h-5 w-5" />
-            </Button>
-          </div>
-          {/* Chat content */}
-          <div className="flex-1 overflow-hidden">
-            <RightSidebar />
-          </div>
+          <RightSidebar />
         </div>
       )}
     </div>
