@@ -1,5 +1,15 @@
 # Claude Code Guidelines
 
+## IMPORTANT: Read Docs and Test Before Coding
+
+**NEVER make code changes before testing APIs first.**
+
+1. Read `FRONTEND_API.md` IN FULL before asking questions - it has test tokens, curl examples, and endpoint docs
+2. Test API endpoints with curl BEFORE writing any code
+3. Don't ask for tokens or info that's already in the docs
+
+Test token is in `FRONTEND_API.md` at the "Test Token (Development Only)" section.
+
 ## Build & Lint
 
 **Always run `npm run build` after making code changes to catch errors before completing a task.**

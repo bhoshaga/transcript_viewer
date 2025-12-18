@@ -735,7 +735,18 @@ const Transcript = () => {
                                         const url = window.URL.createObjectURL(blob);
                                         const a = document.createElement('a');
                                         a.href = url;
-                                        a.download = `${selectedMeeting.title || 'meeting'}-minutes.pdf`;
+
+                                        // Get filename from Content-Disposition header or use fallback
+                                        const contentDisposition = response.headers.get('Content-Disposition');
+                                        let filename = `${selectedMeeting.title || 'meeting'}-minutes.pdf`;
+                                        if (contentDisposition) {
+                                          const match = contentDisposition.match(/filename="?([^";\n]+)"?/);
+                                          if (match && match[1]) {
+                                            filename = match[1];
+                                          }
+                                        }
+                                        a.download = filename;
+
                                         document.body.appendChild(a);
                                         a.click();
                                         window.URL.revokeObjectURL(url);
