@@ -4,11 +4,11 @@
  */
 import React, { memo, useCallback, useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
-import { Avatar, AvatarFallback } from "./ui/avatar";
-import { Trash2 } from "lucide-react";
+import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
+import { Trash2, LogOut } from "lucide-react";
 import { Meeting } from "../types";
 import { getSpeakerColor } from "../data/meetings";
-import { archiveMeeting } from "../apis/meetings";
+import { archiveMeeting, leaveSharedMeeting } from "../apis/meetings";
 import { Button } from "./ui/button";
 import { Skeleton } from "../components/ui/skeleton";
 
@@ -127,7 +127,7 @@ export const MeetingListView = memo(function MeetingListView({
 }: MeetingListViewProps) {
   console.log('[MeetingListView] Render:', { isLoading, meetingsCount: meetings.length });
 
-  // Function to handle archiving (deleting) a meeting
+  // Function to handle archiving (deleting) a meeting - for owners
   const handleArchiveMeeting = useCallback(async (event: React.MouseEvent, meetingId: string) => {
     event.stopPropagation();
 
@@ -149,6 +149,28 @@ export const MeetingListView = memo(function MeetingListView({
     }
   }, [meetings, onMeetingUpdate]);
 
+  // Function to handle leaving a shared meeting - for recipients
+  const handleLeaveSharedMeeting = useCallback(async (event: React.MouseEvent, meetingId: string) => {
+    event.stopPropagation();
+
+    // Optimistic update
+    const optimisticMeetings = meetings.filter(m => m.id !== meetingId);
+    if (onMeetingUpdate) {
+      onMeetingUpdate(optimisticMeetings);
+    }
+
+    try {
+      await leaveSharedMeeting(meetingId);
+    } catch (error) {
+      console.error("Failed to leave shared meeting:", error);
+      // Revert on error
+      if (onMeetingUpdate) {
+        onMeetingUpdate(meetings);
+      }
+      alert("Failed to leave meeting. Please try again.");
+    }
+  }, [meetings, onMeetingUpdate]);
+
   // Render skeleton cards if loading
   if (isLoading) {
     return (
@@ -156,6 +178,15 @@ export const MeetingListView = memo(function MeetingListView({
         {[...Array(6)].map((_, index) => (
           <MeetingCardSkeleton key={index} />
         ))}
+      </div>
+    );
+  }
+
+  // Render empty state
+  if (meetings.length === 0) {
+    return (
+      <div className="text-center py-12 text-muted-foreground">
+        No meetings available.
       </div>
     );
   }
@@ -190,14 +221,27 @@ export const MeetingListView = memo(function MeetingListView({
                       {meeting.duration && (
                         <span className="text-sm font-normal text-foreground">{formatDuration(meeting.duration)}</span>
                       )}
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-6 w-6 text-muted-foreground/40 hover:text-red-400 hover:bg-red-500/10 rounded"
-                        onClick={(e) => handleArchiveMeeting(e, meeting.id)}
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
+                      {meeting.accessType === 'SHARED' ? (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 text-muted-foreground/40 hover:text-orange-400 hover:bg-orange-500/10 rounded"
+                          title="Leave shared meeting"
+                          onClick={(e) => handleLeaveSharedMeeting(e, meeting.id)}
+                        >
+                          <LogOut className="h-3.5 w-3.5" />
+                        </Button>
+                      ) : (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 text-muted-foreground/40 hover:text-red-400 hover:bg-red-500/10 rounded"
+                          title="Delete meeting"
+                          onClick={(e) => handleArchiveMeeting(e, meeting.id)}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
                     </>
                   )}
                 </div>
@@ -215,23 +259,42 @@ export const MeetingListView = memo(function MeetingListView({
               </div>
             </CardHeader>
             <CardContent className="p-3 pt-0">
-              <div className="flex -space-x-1.5">
-                {meeting.participants.slice(0, 3).map((participant, i) => (
-                  <Avatar
-                    key={i}
-                    className="h-6 w-6 border border-background"
-                    style={{ zIndex: i + 1 }}
-                  >
-                    <AvatarFallback className={`text-[10px] ${getSpeakerColor(participant.name)}`}>{participant.name[0]}</AvatarFallback>
-                  </Avatar>
-                ))}
-                {meeting.participants.length > 3 && (
-                  <Avatar className="h-6 w-6 border border-background bg-secondary">
-                    <AvatarFallback className="text-[10px]">
-                      +{meeting.participants.length - 3}
-                    </AvatarFallback>
-                  </Avatar>
+              <div className="flex items-center gap-2">
+                {/* Shared by avatar */}
+                {meeting.sharedBy && (
+                  <div className="relative group/sharer">
+                    <Avatar className="h-6 w-6 border-2 border-blue-500/50">
+                      {meeting.sharedBy.photoUrl && (
+                        <AvatarImage src={meeting.sharedBy.photoUrl} alt={meeting.sharedBy.displayName || 'Sharer'} />
+                      )}
+                      <AvatarFallback className="text-[10px] bg-blue-500/20 text-blue-400">
+                        {meeting.sharedBy.displayName?.[0] || '?'}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="absolute bottom-full left-0 mb-1 px-2 py-1 bg-popover border border-border rounded text-xs whitespace-nowrap opacity-0 group-hover/sharer:opacity-100 transition-opacity pointer-events-none z-10">
+                      Shared by {meeting.sharedBy.displayName || 'someone'}
+                    </div>
+                  </div>
                 )}
+                {/* Participant avatars */}
+                <div className="flex -space-x-1.5">
+                  {meeting.participants.slice(0, 3).map((participant, i) => (
+                    <Avatar
+                      key={i}
+                      className="h-6 w-6 border border-background"
+                      style={{ zIndex: i + 1 }}
+                    >
+                      <AvatarFallback className={`text-[10px] ${getSpeakerColor(participant.name)}`}>{participant.name[0]}</AvatarFallback>
+                    </Avatar>
+                  ))}
+                  {meeting.participants.length > 3 && (
+                    <Avatar className="h-6 w-6 border border-background bg-secondary">
+                      <AvatarFallback className="text-[10px]">
+                        +{meeting.participants.length - 3}
+                      </AvatarFallback>
+                    </Avatar>
+                  )}
+                </div>
               </div>
             </CardContent>
           </Card>

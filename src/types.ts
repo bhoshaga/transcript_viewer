@@ -63,6 +63,13 @@ export interface SharingLink {
   expiry: number;
 }
 
+export interface SharedBy {
+  userId: string;
+  displayName: string;
+  email: string;
+  photoUrl?: string;
+}
+
 export interface Meeting {
   id: string;
   title: string;
@@ -76,6 +83,7 @@ export interface Meeting {
   permissions?: MeetingPermissions;
   access?: AccessLevel;
   accessType?: AccessType;
+  sharedBy?: SharedBy;
   duration?: number;
   speechDuration?: number;
   hasEnded?: boolean;

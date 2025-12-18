@@ -197,12 +197,33 @@ const processTranscriptBlocks = (blocks: TranscriptBlock[] | undefined) => {
   };
 };
 
+// Fetch both MyMeetings and SharedWithMe, combine and dedupe
+const fetchAllMeetings = async (): Promise<Meeting[]> => {
+  const [myMeetings, sharedMeetings] = await Promise.all([
+    listMeetings('MyMeetings'),
+    listMeetings('SharedWithMe'),
+  ]);
+
+  // Combine and dedupe by id (MyMeetings takes priority)
+  const meetingMap = new Map<string, Meeting>();
+  for (const m of sharedMeetings.meetings) {
+    meetingMap.set(m.id, m);
+  }
+  for (const m of myMeetings.meetings) {
+    meetingMap.set(m.id, m);
+  }
+
+  // Sort by created date, newest first
+  return Array.from(meetingMap.values()).sort((a, b) => (b.created || 0) - (a.created || 0));
+};
+
 const Transcript = () => {
   const { USER_NAME } = getEnv();
   const { token } = useAuth();
   const [selectedMeeting, setSelectedMeeting] = useState<Meeting | null>(null);
   const [meetings, setMeetings] = useState<Meeting[] | null>(null);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
+  const [meetingTab, setMeetingTab] = useState<'all' | 'mine' | 'shared'>('all');
 
   const [isTranscriptLoading, setIsTranscriptLoading] = useState(false);
   const [messages, setMessages] = useState<TranscriptMessage[]>([]);
@@ -234,10 +255,17 @@ const Transcript = () => {
   const [renameValue, setRenameValue] = useState("");
   const [showSpeakerStats, setShowSpeakerStats] = useState(true);
   const [shareEmail, setShareEmail] = useState("");
-  const [shareLink, setShareLink] = useState("");
-  const [isShareLoading, setIsShareLoading] = useState(false);
   const [showShareInput, setShowShareInput] = useState(false);
   const [shareSuccess, setShareSuccess] = useState(false);
+
+  // Reset share/rename state when meeting changes
+  useEffect(() => {
+    setShareEmail("");
+    setShowShareInput(false);
+    setShareSuccess(false);
+    setIsRenaming(false);
+    setRenameValue("");
+  }, [selectedMeeting?.id]);
 
   // Minutes generation state
   const [isGeneratingMinutes, setIsGeneratingMinutes] = useState(false);
@@ -335,15 +363,15 @@ const Transcript = () => {
           hasLoadedFromUrl.current = true;
 
           // Start both fetches in parallel
-          const [listResponse, meetingWithTranscript] = await Promise.all([
-            listMeetings('MyMeetings'),
+          const [allMeetings, meetingWithTranscript] = await Promise.all([
+            fetchAllMeetings(),
             getMeetingWithTranscript(meetingIdFromUrl)
           ]);
 
           console.log(`[Transcript] ${Date.now()} fetchData: parallel fetch complete`);
 
           // Set meetings list (for back navigation)
-          setMeetings(listResponse.meetings);
+          setMeetings(allMeetings);
 
           // Set meeting and transcript data directly
           setSelectedMeeting(meetingWithTranscript);
@@ -358,28 +386,28 @@ const Transcript = () => {
           setSpeakerStats(stats);
           setTranscriptDataState(tData);
         } else if (!meetingIdFromUrl) {
-          // LIST VIEW: Fetch meetings list
+          // LIST VIEW: Fetch meetings list (MyMeetings + SharedWithMe)
           // If we have cached meetings, this is a background refresh (no loading state)
           console.log(`[Transcript] ${Date.now()} fetchData: list fetch (cached: ${hasCachedMeetings})`);
-          const response = await listMeetings('MyMeetings');
-          console.log(`[Transcript] ${Date.now()} fetchData: got response, meetings:`, response.meetings?.length);
+          const allMeetings = await fetchAllMeetings();
+          console.log(`[Transcript] ${Date.now()} fetchData: got response, meetings:`, allMeetings?.length);
 
           // SMART MERGE: Add new meetings at top, update existing ones
-          if (hasCachedMeetings && response.meetings) {
+          if (hasCachedMeetings && allMeetings) {
             const existingIds = new Set(meetings.map(m => m.id));
-            const newMeetings = response.meetings.filter(m => !existingIds.has(m.id));
+            const newMeetings = allMeetings.filter(m => !existingIds.has(m.id));
 
             if (newMeetings.length > 0) {
               console.log(`[Transcript] ${Date.now()} fetchData: found ${newMeetings.length} new meetings`);
               // New meetings at top, then update existing with fresh data
-              setMeetings(response.meetings);
+              setMeetings(allMeetings);
             } else {
               // No new meetings, but update existing ones (status changes, etc.)
-              setMeetings(response.meetings);
+              setMeetings(allMeetings);
             }
           } else {
             // No cache, just set the response
-            setMeetings(response.meetings);
+            setMeetings(allMeetings);
           }
         }
       } catch (error) {
@@ -412,8 +440,8 @@ const Transcript = () => {
 
     const pollingInterval = setInterval(async () => {
       try {
-        const response = await listMeetings('MyMeetings');
-        setMeetings(response.meetings);
+        const allMeetings = await fetchAllMeetings();
+        setMeetings(allMeetings);
       } catch (error) {
         console.error("Error refreshing meetings:", error);
       }
@@ -426,7 +454,6 @@ const Transcript = () => {
     setIsTranscriptLoading(true);
     setSelectedMeeting(meeting);
     setMeetingName(meeting.title);
-    setShareLink(""); // Reset share link when switching meetings
 
     // Navigate to meeting detail URL
     if (!meetingIdFromUrl || meetingIdFromUrl !== meeting.id) {
@@ -581,22 +608,23 @@ const Transcript = () => {
   const handleShareWithEmail = async () => {
     if (!selectedMeeting || !shareEmail.trim()) return;
 
-    setIsShareLoading(true);
+    const emailToShare = shareEmail.trim();
+
+    // Optimistic update - immediately show success and close
+    setShareSuccess(true);
+    toast({ title: "Shared", description: `Meeting shared with ${emailToShare}` });
+    setTimeout(() => {
+      setShareEmail("");
+      setShowShareInput(false);
+      setShareSuccess(false);
+    }, 400);
+
+    // Fire API call in background
     try {
-      await shareMeetingWithEmail(selectedMeeting.id, shareEmail.trim(), 'VIEW');
-      setShareSuccess(true);
-      toast({ title: "Shared", description: `Meeting shared with ${shareEmail}` });
-      // Show green state briefly, then close
-      setTimeout(() => {
-        setShareEmail("");
-        setShowShareInput(false);
-        setShareSuccess(false);
-      }, 600);
+      await shareMeetingWithEmail(selectedMeeting.id, emailToShare, 'VIEW');
     } catch (error) {
       console.error("Failed to share meeting:", error);
-      toast({ variant: "destructive", title: "Error", description: "Failed to share meeting" });
-    } finally {
-      setIsShareLoading(false);
+      toast({ variant: "destructive", title: "Share failed", description: `Could not share with ${emailToShare}. Please try again.` });
     }
   };
 
@@ -806,85 +834,93 @@ const Transcript = () => {
                                       <FileText className="h-4 w-4" />
                                     )}
                                   </Button>
-                                  {/* Public Link - one click copy, blue if shared */}
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className={`h-8 w-8 ${selectedMeeting.sharingLink?.reach !== 'PRIVATE' && selectedMeeting.sharingLink?.key ? 'text-blue-400 hover:text-blue-300' : 'text-muted-foreground hover:text-foreground'}`}
-                                    title={selectedMeeting.sharingLink?.reach !== 'PRIVATE' ? "Copy link" : "Create & copy link"}
-                                    onClick={async () => {
-                                      try {
-                                        if (selectedMeeting.sharingLink?.key) {
-                                          const link = `${window.location.origin}/s/${selectedMeeting.sharingLink.key}`;
-                                          navigator.clipboard.writeText(link);
-                                          toast({ title: "Copied Link!" });
-                                        } else {
-                                          const result = await generateShareLink(selectedMeeting.id);
-                                          const link = `${window.location.origin}/s/${result.key}`;
-                                          setSelectedMeeting({
-                                            ...selectedMeeting,
-                                            sharingLink: { key: result.key, reach: 'ANYONE_WITH_LINK', expiry: 0 }
-                                          });
-                                          navigator.clipboard.writeText(link);
-                                          toast({ title: "Link created!", description: "Link copied to clipboard" });
-                                        }
-                                      } catch (error) {
-                                        console.error("Failed to generate share link:", error);
-                                        toast({ variant: "destructive", title: "Error", description: "Failed to create link" });
-                                      }
-                                    }}
-                                  >
-                                    <Link className="h-4 w-4" />
-                                  </Button>
-                                  {/* Share Access - Users icon + inline sliding input */}
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className={`h-8 w-8 ${showShareInput ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
-                                    title="Share access"
-                                    onClick={() => {
-                                      setShowShareInput(!showShareInput);
-                                      if (showShareInput) setShareEmail("");
-                                    }}
-                                  >
-                                    <Users className="h-4 w-4" />
-                                  </Button>
-                                  <div
-                                    className={`overflow-hidden transition-all duration-200 ease-out ${showShareInput ? 'w-48 opacity-100' : 'w-0 opacity-0'}`}
-                                  >
-                                    <div className="relative flex items-center">
-                                      <input
-                                        ref={(input) => input && showShareInput && input.focus()}
-                                        type="email"
-                                        placeholder="email"
-                                        value={shareEmail}
-                                        onChange={(e) => setShareEmail(e.target.value)}
-                                        className={`w-full h-8 pl-2 pr-7 text-base md:text-sm bg-transparent border rounded-lg outline-none focus:ring-0 placeholder:text-muted-foreground/50 transition-colors ${shareSuccess ? 'border-green-400 text-green-400' : 'border-white/30 focus:border-white/30'}`}
-                                        onKeyDown={(e) => {
-                                          if (e.key === 'Enter' && shareEmail.trim()) {
-                                            e.preventDefault();
-                                            handleShareWithEmail();
-                                          }
-                                          if (e.key === 'Escape') {
-                                            setShowShareInput(false);
-                                            setShareEmail("");
+                                  {/* Share buttons - only for owners */}
+                                  {selectedMeeting.accessType === 'OWNER' && (
+                                    <>
+                                      {/* Public Link - one click copy, blue if shared */}
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className={`h-8 w-8 ${selectedMeeting.sharingLink?.reach !== 'PRIVATE' && selectedMeeting.sharingLink?.key ? 'text-blue-400 hover:text-blue-300' : 'text-muted-foreground hover:text-foreground'}`}
+                                        title={selectedMeeting.sharingLink?.reach !== 'PRIVATE' ? "Copy link" : "Create & copy link"}
+                                        onClick={async () => {
+                                          try {
+                                            if (selectedMeeting.sharingLink?.key) {
+                                              const link = `${window.location.origin}/s/${selectedMeeting.sharingLink.key}`;
+                                              navigator.clipboard.writeText(link);
+                                              toast({ title: "Copied Link!" });
+                                            } else {
+                                              const result = await generateShareLink(selectedMeeting.id);
+                                              const link = `${window.location.origin}/s/${result.key}`;
+                                              setSelectedMeeting({
+                                                ...selectedMeeting,
+                                                sharingLink: { key: result.key, reach: 'ANYONE_WITH_LINK', expiry: 0 }
+                                              });
+                                              navigator.clipboard.writeText(link);
+                                              toast({ title: "Link created!", description: "Link copied to clipboard" });
+                                            }
+                                          } catch (error) {
+                                            console.error("Failed to generate share link:", error);
+                                            toast({ variant: "destructive", title: "Error", description: "Failed to create link" });
                                           }
                                         }}
-                                      />
-                                      <span className={`absolute right-2 text-xs transition-colors ${shareSuccess ? 'text-green-400' : shareEmail.trim() ? 'text-foreground' : 'text-muted-foreground/40'}`}>
-                                        {shareSuccess ? '✓' : '↵'}
-                                      </span>
-                                    </div>
-                                  </div>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-8 w-8 text-muted-foreground hover:text-foreground"
-                                    onClick={handleStartRename}
-                                    title="Rename"
-                                  >
-                                    <Pencil className="h-4 w-4" />
-                                  </Button>
+                                      >
+                                        <Link className="h-4 w-4" />
+                                      </Button>
+                                      {/* Share Access - Users icon + inline sliding input */}
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className={`h-8 w-8 ${showShareInput ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+                                        title="Share access"
+                                        onClick={() => {
+                                          setShowShareInput(!showShareInput);
+                                          if (showShareInput) setShareEmail("");
+                                        }}
+                                      >
+                                        <Users className="h-4 w-4" />
+                                      </Button>
+                                      <div
+                                        className={`overflow-hidden transition-all duration-200 ease-out ${showShareInput ? 'w-48 opacity-100' : 'w-0 opacity-0'}`}
+                                      >
+                                        <div className="relative flex items-center">
+                                          <input
+                                            ref={(input) => input && showShareInput && input.focus()}
+                                            type="email"
+                                            placeholder="email"
+                                            value={shareEmail}
+                                            onChange={(e) => setShareEmail(e.target.value)}
+                                            className={`w-full h-8 pl-2 pr-7 text-base md:text-sm bg-transparent border rounded-lg outline-none focus:ring-0 placeholder:text-muted-foreground/50 transition-colors ${shareSuccess ? 'border-green-400 text-green-400' : 'border-white/30 focus:border-white/30'}`}
+                                            onKeyDown={(e) => {
+                                              if (e.key === 'Enter' && shareEmail.trim()) {
+                                                e.preventDefault();
+                                                handleShareWithEmail();
+                                              }
+                                              if (e.key === 'Escape') {
+                                                setShowShareInput(false);
+                                                setShareEmail("");
+                                              }
+                                            }}
+                                          />
+                                          <span className={`absolute right-2 text-xs transition-colors ${shareSuccess ? 'text-green-400' : shareEmail.trim() ? 'text-foreground' : 'text-muted-foreground/40'}`}>
+                                            {shareSuccess ? '✓' : '↵'}
+                                          </span>
+                                        </div>
+                                      </div>
+                                    </>
+                                  )}
+                                  {/* Rename button - only for owners */}
+                                  {selectedMeeting.accessType === 'OWNER' && (
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                                      onClick={handleStartRename}
+                                      title="Rename"
+                                    >
+                                      <Pencil className="h-4 w-4" />
+                                    </Button>
+                                  )}
                                 </>
                               )}
                               <Button
@@ -1087,12 +1123,39 @@ const Transcript = () => {
         ) : (
           // ===== TRANSCRIPT LIST VIEW =====
           // Shows all meetings as cards (/ route)
-          <MeetingListView
-            meetings={meetings || []}
-            onMeetingSelect={handleMeetingSelect}
-            onMeetingUpdate={handleMeetingsUpdate}
-            isLoading={isInitialLoading}
-          />
+          <div className="flex flex-col gap-4">
+            {/* Meeting tabs */}
+            <div className="flex gap-1 p-1 bg-white/5 rounded-lg w-fit">
+              {[
+                { key: 'all', label: 'All' },
+                { key: 'mine', label: 'My Meetings' },
+                { key: 'shared', label: 'Shared with Me' },
+              ].map(({ key, label }) => (
+                <button
+                  key={key}
+                  onClick={() => setMeetingTab(key as 'all' | 'mine' | 'shared')}
+                  className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                    meetingTab === key
+                      ? 'bg-white/10 text-foreground'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <MeetingListView
+              meetings={(meetings || []).filter(m => {
+                if (meetingTab === 'all') return true;
+                if (meetingTab === 'mine') return m.accessType === 'OWNER';
+                if (meetingTab === 'shared') return m.accessType === 'SHARED';
+                return true;
+              })}
+              onMeetingSelect={handleMeetingSelect}
+              onMeetingUpdate={handleMeetingsUpdate}
+              isLoading={isInitialLoading}
+            />
+          </div>
         )}
       </div>
     </div>

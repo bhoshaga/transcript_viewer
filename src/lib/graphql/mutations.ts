@@ -44,6 +44,14 @@ export const REMOVE_SHARE = `
   }
 `;
 
+export const LEAVE_SHARED_MEETING = `
+  mutation LeaveSharedMeeting($input: LeaveSharedMeetingInput!) {
+    leaveSharedMeeting(input: $input) {
+      success
+    }
+  }
+`;
+
 export const UPDATE_MEETING_SHARING = `
   mutation UpdateMeetingSharing($input: UpdateMeetingSharingInput!) {
     updateMeetingSharing(input: $input) {

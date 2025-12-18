@@ -4,7 +4,7 @@
 
 import { graphqlClient } from '../lib/graphql/client';
 import { LIST_MEETINGS, GET_MEETING, GET_MEETING_WITH_TRANSCRIPT } from '../lib/graphql/queries';
-import { ARCHIVE_MEETING, UPDATE_MEETING, SHARE_MEETING, UPDATE_MEETING_SHARING } from '../lib/graphql/mutations';
+import { ARCHIVE_MEETING, UPDATE_MEETING, SHARE_MEETING, UPDATE_MEETING_SHARING, LEAVE_SHARED_MEETING } from '../lib/graphql/mutations';
 import {
   Meeting,
   ListMeetingsResponse,
@@ -33,6 +33,10 @@ interface MeetingWithTranscriptData {
 
 interface ArchiveMeetingData {
   archiveMeeting: MutationResponse;
+}
+
+interface LeaveSharedMeetingData {
+  leaveSharedMeeting: MutationResponse;
 }
 
 interface UpdateMeetingData {
@@ -107,6 +111,16 @@ export async function archiveMeeting(meetingId: string): Promise<boolean> {
   return data.archiveMeeting.success;
 }
 
+export async function leaveSharedMeeting(meetingId: string): Promise<boolean> {
+  const data = await graphqlClient.mutate<LeaveSharedMeetingData>(
+    LEAVE_SHARED_MEETING,
+    { input: { meetingId } },
+    'LeaveSharedMeeting'
+  );
+
+  return data.leaveSharedMeeting.success;
+}
+
 export async function updateMeeting(
   meetingId: string,
   updates: { title?: string; rawTranscript?: unknown }
@@ -139,7 +153,7 @@ export async function shareMeetingWithEmail(
 ): Promise<{ success: boolean; shareId: string }> {
   const data = await graphqlClient.mutate<ShareMeetingData>(
     SHARE_MEETING,
-    { input: { meetingId, sharedWithEmail: email, accessLevel } },
+    { input: { meetingId, email, accessLevel } },
     'ShareMeeting'
   );
 

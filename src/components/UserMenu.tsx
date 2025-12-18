@@ -1,6 +1,7 @@
 import { Button } from "./ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { Separator } from "./ui/separator";
+import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
 import { UserCircle, CreditCard, LogOut, LogIn } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import { logout } from "../lib/auth";
@@ -52,8 +53,13 @@ export function UserMenu() {
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <Button variant="ghost" size="icon" className="h-8 w-8 [&_svg]:size-5">
-          <UserCircle />
+        <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full p-0">
+          <Avatar className="h-8 w-8">
+            {user.photoURL && <AvatarImage src={user.photoURL} alt={user.displayName || 'User'} />}
+            <AvatarFallback className="text-xs">
+              {user.displayName?.[0] || user.email?.[0] || '?'}
+            </AvatarFallback>
+          </Avatar>
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-56 bg-card border-border p-2" align="end">

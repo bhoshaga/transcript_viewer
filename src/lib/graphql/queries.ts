@@ -34,6 +34,7 @@ export const LIST_MEETINGS = `
         participants { name analytics { textLength } }
         access
         accessType
+        sharedBy { userId displayName email photoUrl }
         duration
         speechDuration
         created

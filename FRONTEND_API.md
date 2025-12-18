@@ -628,7 +628,7 @@ mutation UpdateMeeting($input: UpdateMeetingInput!) {
 }
 ```
 
-**Response**:
+**Response (success)**:
 ```json
 {
   "data": {
@@ -639,6 +639,22 @@ mutation UpdateMeeting($input: UpdateMeetingInput!) {
   }
 }
 ```
+
+**Response (error - not authorized)**:
+```json
+{
+  "data": {
+    "updateMeeting": {
+      "success": false,
+      "errors": [
+        { "message": "Not authorized", "statusCode": 403 }
+      ]
+    }
+  }
+}
+```
+
+**Note**: Only the meeting owner can update. Shared users get `statusCode: 403`.
 
 ---
 
@@ -734,9 +750,22 @@ query GetMeetingShares($meetingId: ID!) {
 Use the `ListMeetings` query with `type: "SharedWithMe"`:
 
 ```graphql
-query ListMeetings($type: MeetingType!, ...) {
-  meetings(type: $type, ...) {
-    meetings { ... }
+query ListSharedMeetings($type: MeetingType!, $filter: SearchFilterInput!) {
+  meetings(type: $type, filter: $filter) {
+    meetings {
+      id
+      title
+      platform
+      created
+      access
+      accessType
+      sharedBy {
+        userId
+        displayName
+        email
+        photoUrl
+      }
+    }
     hasMore
   }
 }
@@ -750,6 +779,38 @@ query ListMeetings($type: MeetingType!, ...) {
   "filter": {}
 }
 ```
+
+**Response**:
+```json
+{
+  "data": {
+    "meetings": {
+      "meetings": [
+        {
+          "id": "97636f9afc684e05db16",
+          "title": "Team Standup",
+          "platform": "GOOGLE_MEET",
+          "created": 1765848765845,
+          "access": "VIEW",
+          "accessType": "SHARED",
+          "sharedBy": {
+            "userId": "user_abc123",
+            "displayName": "John Doe",
+            "email": "john@example.com",
+            "photoUrl": "https://..."
+          }
+        }
+      ],
+      "hasMore": false
+    }
+  }
+}
+```
+
+**Notes**:
+- `accessType` is `"SHARED"` for SharedWithMe meetings (vs `"OWNER"` for MyMeetings)
+- `access` reflects the share permission: `"VIEW"`, `"EDIT"`, or `"ADMIN"`
+- `sharedBy` shows who shared the meeting with you (only populated for SharedWithMe)
 
 ---
 
@@ -771,6 +832,44 @@ mutation RemoveShare($input: RemoveShareInput!) {
   }
 }
 ```
+
+**Note**: This is for **owners** to revoke access from someone they shared with.
+
+---
+
+## Leave Shared Meeting
+
+For **recipients** to remove a shared meeting from their SharedWithMe list. The owner can reshare later if needed.
+
+```graphql
+mutation LeaveSharedMeeting($input: LeaveSharedMeetingInput!) {
+  leaveSharedMeeting(input: $input) {
+    success
+  }
+}
+```
+
+**Variables**:
+```json
+{
+  "input": {
+    "meetingId": "a5ea703731bb38fe443a"
+  }
+}
+```
+
+**Response**:
+```json
+{
+  "data": {
+    "leaveSharedMeeting": {
+      "success": true
+    }
+  }
+}
+```
+
+**Note**: This is for **recipients** (User B) to leave a meeting that was shared with them. Different from `removeShare` which is for owners.
 
 ---
 
