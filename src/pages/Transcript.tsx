@@ -321,7 +321,13 @@ const Transcript = () => {
     const fetchData = async () => {
       try {
         console.log(`[Transcript] ${Date.now()} fetchData: starting fetch`);
-        setIsInitialLoading(true);
+
+        // OPTIMISTIC CACHING: Only show loading skeleton if we have NO cached meetings
+        // This prevents flash when navigating back from detail view
+        const hasCachedMeetings = meetings && meetings.length > 0;
+        if (!hasCachedMeetings) {
+          setIsInitialLoading(true);
+        }
 
         if (meetingIdFromUrl && !hasLoadedFromUrl.current) {
           // PARALLEL FETCH: When we have a meeting ID, fetch both list and transcript simultaneously
@@ -351,20 +357,41 @@ const Transcript = () => {
           setTranscriptData(msgs.length > 0 ? msgs as any : null);
           setSpeakerStats(stats);
           setTranscriptDataState(tData);
-        } else {
-          // SEQUENTIAL FETCH: Just fetch the list (no meeting ID in URL)
-          console.log(`[Transcript] ${Date.now()} fetchData: list-only fetch`);
+        } else if (!meetingIdFromUrl) {
+          // LIST VIEW: Fetch meetings list
+          // If we have cached meetings, this is a background refresh (no loading state)
+          console.log(`[Transcript] ${Date.now()} fetchData: list fetch (cached: ${hasCachedMeetings})`);
           const response = await listMeetings('MyMeetings');
           console.log(`[Transcript] ${Date.now()} fetchData: got response, meetings:`, response.meetings?.length);
-          setMeetings(response.meetings);
+
+          // SMART MERGE: Add new meetings at top, update existing ones
+          if (hasCachedMeetings && response.meetings) {
+            const existingIds = new Set(meetings.map(m => m.id));
+            const newMeetings = response.meetings.filter(m => !existingIds.has(m.id));
+
+            if (newMeetings.length > 0) {
+              console.log(`[Transcript] ${Date.now()} fetchData: found ${newMeetings.length} new meetings`);
+              // New meetings at top, then update existing with fresh data
+              setMeetings(response.meetings);
+            } else {
+              // No new meetings, but update existing ones (status changes, etc.)
+              setMeetings(response.meetings);
+            }
+          } else {
+            // No cache, just set the response
+            setMeetings(response.meetings);
+          }
         }
       } catch (error) {
         console.error("Error fetching data:", error);
-        toast({
-          variant: "destructive",
-          title: "Error",
-          description: "Failed to fetch data. Please try again.",
-        });
+        // Only show error toast if we don't have cached data to show
+        if (!meetings || meetings.length === 0) {
+          toast({
+            variant: "destructive",
+            title: "Error",
+            description: "Failed to fetch data. Please try again.",
+          });
+        }
         // If we were trying to load a specific meeting that failed, go to list
         if (meetingIdFromUrl) {
           navigateToMeetingList();
