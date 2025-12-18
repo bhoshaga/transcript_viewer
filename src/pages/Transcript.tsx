@@ -241,7 +241,7 @@ const Transcript = () => {
 
   // Minutes generation state
   const [isGeneratingMinutes, setIsGeneratingMinutes] = useState(false);
-  const [minutesCountdown, setMinutesCountdown] = useState(10);
+  const [minutesCountdown, setMinutesCountdown] = useState(20);
   const [minutesSuccess, setMinutesSuccess] = useState(false);
   const minutesIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -712,7 +712,7 @@ const Transcript = () => {
 
                                       try {
                                         setIsGeneratingMinutes(true);
-                                        setMinutesCountdown(10);
+                                        setMinutesCountdown(20);
                                         setMinutesSuccess(false);
 
                                         const apiUrl = process.env.REACT_APP_GRAPHQL_URL?.replace('/api/2/graphql', '') || '';
