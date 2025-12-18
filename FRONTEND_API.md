@@ -1526,6 +1526,330 @@ const onUpdate = (data) => {
 
 ---
 
+## AI Streaming - Detailed Internal Flow
+
+This section documents the exact server-side behavior for implementing AI chat in the webapp.
+
+### Sequence Diagram
+
+```
+Frontend                          Server                           OpenAI
+    |                                |                                |
+    |--[1] StartAgentRun (HTTP)----->|                                |
+    |                                |--[creates agent_run_id]        |
+    |                                |--[status = "RUNNING"]          |
+    |                                |--[starts background thread]--->|
+    |<--[2] {agentRunId} (HTTP)------|                                |
+    |                                |                                |
+    |--[3] Subscribe AgentRunUpdates-|                                |
+    |      (WebSocket)               |                                |
+    |                                |<---[streaming chunk 1]---------|
+    |                                |--[creates assistant message]   |
+    |                                |--[status = "COMPLETED"]        |
+    |<--[4] WS push: COMPLETED-------|                                |
+    |       content: "chunk1"        |                                |
+    |                                |<---[streaming chunk 2]---------|
+    |<--[5] WS push: content grows---|                                |
+    |       content: "chunk1chunk2"  |                                |
+    |                                |<---[streaming chunk N]---------|
+    |<--[6] WS push: final-----------|                                |
+    |       content: "full response" |                                |
+    |       quickReplies: [...]      |                                |
+```
+
+### Key Implementation Details
+
+| Step | What Happens | Code Location |
+|------|--------------|---------------|
+| **1. HTTP Request** | `StartAgentRun` mutation received | `graphql_schema.py:1408-1428` |
+| **2. Immediate Return** | Server returns `{success: true, agentRunId}` immediately, does NOT wait for AI | `ai_agent.py:295-304` |
+| **3. Background Thread** | AI processing runs in separate thread | `ai_agent.py:295-300` |
+| **4. Status "RUNNING"** | Initial state - frontend shows "Thinking..." | `ai_agent.py:243` |
+| **5. First Chunk** | On first OpenAI chunk: creates assistant message, status → "COMPLETED" | `ai_agent.py:120-136` |
+| **6. Subsequent Chunks** | Each chunk: content is REPLACED (not appended), pushed via WebSocket | `ai_agent.py:137-147` |
+
+### Why "COMPLETED" on First Chunk?
+
+The server sets `status: "COMPLETED"` as soon as the first token arrives (NOT when AI finishes). This is intentional:
+
+1. **"RUNNING" + no assistant message** = Show "Thinking..." indicator
+2. **"COMPLETED" + assistant message exists** = Hide "Thinking...", show streaming text
+3. Content continues to grow with each WebSocket push until `quickReplies` appears (signals done)
+
+### Content is Replaced, Not Appended
+
+Each WebSocket push contains the **full accumulated content**, not a delta:
+
+```javascript
+// Push 1: content = "Hello"
+// Push 2: content = "Hello, how"
+// Push 3: content = "Hello, how are"
+// Push 4: content = "Hello, how are you?"
+
+// Frontend just replaces the displayed text each time:
+onUpdate = (data) => {
+  setContent(data.agentRun.conversationHistory.at(-1).content);
+};
+```
+
+### Detecting Streaming Complete
+
+The AI response is complete when `quickReplies` array is populated:
+
+```javascript
+const lastMessage = agentRun.conversationHistory.at(-1);
+const isStreaming = lastMessage?.role === 'assistant' &&
+                    (!lastMessage.quickReplies || lastMessage.quickReplies.length === 0);
+const isComplete = lastMessage?.quickReplies?.length > 0;
+```
+
+### React Implementation Example
+
+```typescript
+function useAIChat(meetingId: string) {
+  const [isThinking, setIsThinking] = useState(false);
+  const [content, setContent] = useState('');
+  const [isStreaming, setIsStreaming] = useState(false);
+  const [quickReplies, setQuickReplies] = useState<string[]>([]);
+
+  const startChat = async (prompt: string) => {
+    // Step 1: Start agent run (HTTP)
+    const { agentRunId } = await startAgentRun({ prompt, meetingId });
+    setIsThinking(true);  // Show "Thinking..."
+
+    // Step 2: Subscribe to updates (WebSocket)
+    subscribeToAgentRun(agentRunId, (data) => {
+      const run = data?.agentRun;
+      if (!run) return;
+
+      if (run.status === 'RUNNING' && run.conversationHistory.length <= 1) {
+        // Only user message, AI hasn't responded yet
+        setIsThinking(true);
+      } else {
+        // First chunk arrived (status is COMPLETED)
+        setIsThinking(false);
+
+        const assistantMsg = run.conversationHistory.filter(m => m.role === 'assistant').at(-1);
+        if (assistantMsg) {
+          setContent(assistantMsg.content);
+          setIsStreaming(assistantMsg.quickReplies?.length === 0);
+          setQuickReplies(assistantMsg.quickReplies || []);
+        }
+      }
+    });
+  };
+
+  return { startChat, isThinking, content, isStreaming, quickReplies };
+}
+```
+
+---
+
+## AI Chat: Common Mistakes & Lessons Learned
+
+### ❌ Mistake 1: Closing Subscription After First Response
+
+**Problem:** The webapp closes the WebSocket subscription when the first AI response completes, then calls `continueAgentRun` for follow-up questions. The server processes the follow-up correctly, but the webapp never receives the streaming updates because there's no active subscription.
+
+**Server logs showing the problem:**
+```
+INFO:ai_agent:🤖 Continue agent run evKGZXTOmNFzviGjluOq: what did i ask you to do?
+INFO:subscription_manager:[SubscriptionManager] No active subscription for evKGZXTOmNFzviGjluOq  ← BUG!
+INFO:ai_agent:🤖 Streaming done! 86 chunks, 382 chars  ← Response generated but not delivered
+```
+
+**Result:** User sees stale data (first response) instead of the new follow-up response.
+
+**✅ Correct Approach:** Keep the subscription open for the entire conversation, OR re-subscribe BEFORE calling `continueAgentRun`.
+
+```typescript
+// Option A: Keep subscription open (RECOMMENDED)
+const startConversation = async (prompt: string) => {
+  const { agentRunId } = await startAgentRun({ prompt, meetingId });
+
+  // Create subscription once, keep it open for entire conversation
+  const unsubscribe = subscribeToAgentRun(agentRunId, handleUpdate);
+
+  // Store unsubscribe function - only call when user leaves the chat
+  setUnsubscribe(() => unsubscribe);
+};
+
+const sendFollowUp = async (userInput: string) => {
+  // Subscription is still active, just call continueAgentRun
+  await continueAgentRun({ agentRunId, userInput });
+  // Updates will arrive via the existing subscription
+};
+
+// Option B: Re-subscribe before each mutation
+const sendFollowUp = async (userInput: string) => {
+  // First, ensure subscription is active
+  subscribeToAgentRun(agentRunId, handleUpdate);
+
+  // Then send the follow-up
+  await continueAgentRun({ agentRunId, userInput });
+};
+```
+
+---
+
+### ❌ Mistake 2: Displaying Wrong Message from Conversation History
+
+**Problem:** After receiving the subscription update, the webapp displays the first assistant message instead of the latest one.
+
+**Why it happens:** `conversationHistory` contains ALL messages in the conversation. For follow-ups, there are multiple assistant messages.
+
+```json
+{
+  "conversationHistory": [
+    { "role": "user", "content": "What were the key points?" },
+    { "role": "assistant", "content": "Here are the key points..." },      // ← First response
+    { "role": "user", "content": "What did I ask you to do?" },
+    { "role": "assistant", "content": "You asked me to summarize..." }     // ← Latest response
+  ]
+}
+```
+
+**✅ Correct Approach:** Always get the LAST assistant message:
+
+```typescript
+const handleUpdate = (data) => {
+  const history = data.agentRun?.conversationHistory || [];
+
+  // Get ALL assistant messages, then take the last one
+  const assistantMessages = history.filter(m => m.role === 'assistant');
+  const latestResponse = assistantMessages[assistantMessages.length - 1];
+
+  // Or using .at(-1)
+  const latestResponse = assistantMessages.at(-1);
+
+  setCurrentResponse(latestResponse?.content || '');
+};
+```
+
+---
+
+### ❌ Mistake 3: Race Condition - Subscribing After AI Starts
+
+**Problem:** If there's a delay between calling `startAgentRun` and subscribing to `AgentRunUpdates`, early streaming chunks may be pushed before the subscription is registered.
+
+**Server logs:**
+```
+INFO:ai_agent:🤖 Created agent run: abc123
+INFO:subscription_manager:No active subscription for abc123  ← Chunks lost
+INFO:subscription_manager:No active subscription for abc123  ← More chunks lost
+INFO:subscription_manager:Registered agent run subscription: abc123  ← Finally registered
+```
+
+**✅ Correct Approach:** The server handles this gracefully - when you subscribe, it yields the current state (including any content already generated). However, for the best UX, subscribe immediately after getting the `agentRunId`:
+
+```typescript
+const startChat = async (prompt: string) => {
+  // Step 1: Start agent run
+  const { agentRunId } = await startAgentRun({ prompt, meetingId });
+
+  // Step 2: Subscribe IMMEDIATELY (don't await anything else first)
+  subscribeToAgentRun(agentRunId, handleUpdate);
+};
+```
+
+---
+
+### ❌ Mistake 4: Not Handling All Status Transitions
+
+**Problem:** Only handling `COMPLETED` status, missing the `RUNNING` → `COMPLETED` transition.
+
+**Status flow:**
+1. `RUNNING` (no assistant message yet) → Show "Thinking..."
+2. `COMPLETED` (assistant message exists, `quickReplies` empty) → Show streaming text
+3. `COMPLETED` (assistant message exists, `quickReplies` populated) → Streaming done
+
+**✅ Correct Approach:**
+
+```typescript
+const handleUpdate = (data) => {
+  const run = data.agentRun;
+  if (!run) return;
+
+  const history = run.conversationHistory || [];
+  const assistantMsgs = history.filter(m => m.role === 'assistant');
+  const latestAssistant = assistantMsgs.at(-1);
+
+  if (run.status === 'RUNNING' && !latestAssistant) {
+    // State 1: Thinking (no AI response yet)
+    setIsThinking(true);
+    setIsStreaming(false);
+  } else if (latestAssistant && !latestAssistant.quickReplies?.length) {
+    // State 2: Streaming (content arriving, not done yet)
+    setIsThinking(false);
+    setIsStreaming(true);
+    setContent(latestAssistant.content);
+  } else if (latestAssistant?.quickReplies?.length > 0) {
+    // State 3: Complete (quickReplies indicates done)
+    setIsThinking(false);
+    setIsStreaming(false);
+    setContent(latestAssistant.content);
+    setQuickReplies(latestAssistant.quickReplies);
+  }
+};
+```
+
+---
+
+### Summary: Correct AI Chat Flow
+
+```typescript
+function useAIConversation(meetingId: string) {
+  const [agentRunId, setAgentRunId] = useState<string | null>(null);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [isThinking, setIsThinking] = useState(false);
+  const [isStreaming, setIsStreaming] = useState(false);
+  const unsubscribeRef = useRef<(() => void) | null>(null);
+
+  const handleUpdate = useCallback((data: any) => {
+    const run = data.agentRun;
+    if (!run) return;
+
+    const history = run.conversationHistory || [];
+    setMessages(history);
+
+    const assistantMsgs = history.filter(m => m.role === 'assistant');
+    const latest = assistantMsgs.at(-1);
+
+    setIsThinking(run.status === 'RUNNING' && !latest);
+    setIsStreaming(!!latest && !latest.quickReplies?.length);
+  }, []);
+
+  // Start a new conversation
+  const startConversation = async (prompt: string) => {
+    const { agentRunId } = await startAgentRun({ prompt, meetingId });
+    setAgentRunId(agentRunId);
+    setIsThinking(true);
+
+    // Subscribe and keep subscription open
+    unsubscribeRef.current = subscribeToAgentRun(agentRunId, handleUpdate);
+  };
+
+  // Send follow-up (subscription is already open)
+  const sendFollowUp = async (userInput: string) => {
+    if (!agentRunId) return;
+    setIsThinking(true);
+    await continueAgentRun({ agentRunId, userInput });
+    // Response will arrive via existing subscription
+  };
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      unsubscribeRef.current?.();
+    };
+  }, []);
+
+  return { messages, isThinking, isStreaming, startConversation, sendFollowUp };
+}
+```
+
+---
+
 ## Subscribe to User Updates
 
 ```graphql
