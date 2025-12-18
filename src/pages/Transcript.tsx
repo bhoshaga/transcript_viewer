@@ -790,7 +790,7 @@ const Transcript = () => {
                                         if (selectedMeeting.sharingLink?.key) {
                                           const link = `${window.location.origin}/s/${selectedMeeting.sharingLink.key}`;
                                           navigator.clipboard.writeText(link);
-                                          toast({ title: "Copied!", description: "Link copied to clipboard" });
+                                          toast({ title: "Copied Link!" });
                                         } else {
                                           const result = await generateShareLink(selectedMeeting.id);
                                           const link = `${window.location.origin}/s/${result.key}`;
@@ -832,7 +832,7 @@ const Transcript = () => {
                                         placeholder="email"
                                         value={shareEmail}
                                         onChange={(e) => setShareEmail(e.target.value)}
-                                        className={`w-full h-8 pl-2 pr-7 text-sm bg-transparent border rounded-lg outline-none focus:ring-0 placeholder:text-muted-foreground/50 transition-colors ${shareSuccess ? 'border-green-400 text-green-400' : 'border-white/30 focus:border-white/30'}`}
+                                        className={`w-full h-8 pl-2 pr-7 text-base md:text-sm bg-transparent border rounded-lg outline-none focus:ring-0 placeholder:text-muted-foreground/50 transition-colors ${shareSuccess ? 'border-green-400 text-green-400' : 'border-white/30 focus:border-white/30'}`}
                                         onKeyDown={(e) => {
                                           if (e.key === 'Enter' && shareEmail.trim()) {
                                             e.preventDefault();
@@ -952,13 +952,13 @@ const Transcript = () => {
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                              className="h-5 w-5 text-muted-foreground hover:text-foreground opacity-40 hover:opacity-100"
                               onClick={() => {
                                 const transcriptText = messages
                                   .map(m => `${m.speaker}: ${m.content}`)
                                   .join('\n\n');
                                 navigator.clipboard.writeText(transcriptText);
-                                toast({ title: "Copied", description: "Transcript copied to clipboard" });
+                                toast({ title: "Copied Transcript!" });
                               }}
                             >
                               <Copy className="h-4 w-4" />
@@ -985,7 +985,7 @@ const Transcript = () => {
                             )}
                             <Input
                               placeholder="Search..."
-                              className="h-full pl-7 pr-2 text-xs rounded-md focus:ring-0 focus:outline-none focus-visible:ring-0 border border-white/20 bg-secondary"
+                              className="h-full pl-7 pr-2 text-base md:text-xs rounded-md focus:ring-0 focus:outline-none focus-visible:ring-0 border border-white/20 bg-secondary"
                               value={searchQuery}
                               onChange={(e) => setSearchQuery(e.target.value)}
                               onKeyDown={(e) => e.key === 'Escape' && clearSearch()}
