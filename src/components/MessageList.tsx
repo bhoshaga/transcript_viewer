@@ -53,7 +53,7 @@ const MessageItem = memo(function MessageItem({
   return (
     <div
       className={cn(
-        "group flex items-start space-x-3 py-2 px-3 rounded-md",
+        "group flex items-start space-x-3 py-2 rounded-md",
         message.isStarred && "bg-yellow-100/50 dark:bg-yellow-900/20",
         hoveredDelete === message.id && "bg-red-500/10",
         isCurrentSearchResult && "bg-blue-300/20 border border-blue-400",

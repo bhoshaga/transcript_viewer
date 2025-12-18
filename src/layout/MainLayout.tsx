@@ -4,7 +4,7 @@ import { Outlet } from "react-router-dom";
 import { Button } from "../components/ui/button";
 import { Card } from "../components/ui/card";
 import { UserMenu } from "../components/UserMenu";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, X } from "lucide-react";
 import { useBreadcrumb } from "../lib/BreadcrumbContext";
 import { useTranscript } from "../lib/TranscriptContext";
 
@@ -17,6 +17,25 @@ const STORAGE_KEY = 'sidebar-width';
 const MainLayout = () => {
   const { navigateToMeetingList } = useBreadcrumb();
   const { meetingName } = useTranscript();
+
+  // Mobile state
+  const [isMobile, setIsMobile] = useState(false);
+  const [isChatOpen, setIsChatOpen] = useState(false);
+
+  // Detect mobile on mount and resize
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 768);
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
+  // Listen for chat drawer open event
+  useEffect(() => {
+    const handleOpenChat = () => setIsChatOpen(true);
+    window.addEventListener('openChatDrawer', handleOpenChat);
+    return () => window.removeEventListener('openChatDrawer', handleOpenChat);
+  }, []);
 
   // Resizable sidebar state
   const [sidebarWidth, setSidebarWidth] = useState(() => {
@@ -107,31 +126,57 @@ const MainLayout = () => {
         </div>
       </nav>
       
-      <div className="flex flex-1 overflow-hidden" ref={containerRef}>
+      <div className="flex flex-1 min-h-0 overflow-hidden" ref={containerRef}>
         {/* Main content */}
-        <div className="main-content flex-1 pl-5 pr-0.5 pb-4 pt-4 overflow-auto">
+        <div className="main-content flex-1 pl-3 pr-3 md:pl-5 md:pr-0.5 pb-4 pt-4 overflow-auto relative">
           <Outlet />
         </div>
 
-        {/* Resizable divider */}
-        <div
-          className="w-4 cursor-col-resize flex-shrink-0 flex items-center justify-center group"
-          onMouseDown={handleMouseDown}
-          onDoubleClick={handleDoubleClick}
-        >
-          <div className={`w-px h-full bg-border group-hover:bg-purple-500 transition-colors ${isDragging ? 'bg-purple-500' : ''}`} />
-        </div>
+        {/* Resizable divider - hidden on mobile */}
+        {!isMobile && (
+          <div
+            className="w-4 cursor-col-resize flex-shrink-0 flex items-center justify-center group"
+            onMouseDown={handleMouseDown}
+            onDoubleClick={handleDoubleClick}
+          >
+            <div className={`w-px h-full bg-border group-hover:bg-purple-500 transition-colors ${isDragging ? 'bg-purple-500' : ''}`} />
+          </div>
+        )}
 
-        {/* Right sidebar - resizable width */}
-        <div
-          className="right-sidebar flex-shrink-0 overflow-hidden pt-4 pr-5 pb-4 pl-0.5"
-          style={{ width: sidebarWidth }}
-        >
-          <Card className="h-full flex flex-col overflow-hidden">
-            <RightSidebar />
-          </Card>
-        </div>
+        {/* Right sidebar - hidden on mobile, shown as drawer */}
+        {!isMobile && (
+          <div
+            className="right-sidebar flex-shrink-0 overflow-hidden pt-4 pr-5 pb-4 pl-0.5"
+            style={{ width: sidebarWidth }}
+          >
+            <Card className="h-full flex flex-col overflow-hidden">
+              <RightSidebar />
+            </Card>
+          </div>
+        )}
       </div>
+
+      {/* Mobile: Full-screen chat drawer */}
+      {isMobile && isChatOpen && (
+        <div className="fixed inset-0 z-50 bg-background flex flex-col">
+          {/* Drawer header */}
+          <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+            <span className="font-medium">Chat</span>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setIsChatOpen(false)}
+              className="h-8 w-8"
+            >
+              <X className="h-5 w-5" />
+            </Button>
+          </div>
+          {/* Chat content */}
+          <div className="flex-1 overflow-hidden">
+            <RightSidebar />
+          </div>
+        </div>
+      )}
     </div>
   );
 };

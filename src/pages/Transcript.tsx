@@ -25,6 +25,7 @@ import {
   Copy,
   BarChart2,
   Send,
+  MessageCircleMore,
 } from "lucide-react";
 import { getSpeakerColor } from "../data/meetings";
 import { Meeting, TranscriptBlock } from "../types";
@@ -601,12 +602,12 @@ const Transcript = () => {
   const showTranscriptViewLayout = selectedMeeting || ((meetingIdFromUrl || isSharedView) && isInitialLoading);
 
   return (
-    <div className={showTranscriptViewLayout ? "h-full flex flex-col" : "min-h-screen"}>
-      <div className={showTranscriptViewLayout ? "flex-1 overflow-hidden" : ""}>
+    <div className={showTranscriptViewLayout ? "flex flex-col" : "min-h-screen"}>
+      <div className={showTranscriptViewLayout ? "flex-1" : ""}>
         {selectedMeeting ? (
           // ===== TRANSCRIPT VIEW =====
           // Shows a specific meeting's transcript detail (/t/:id route)
-          <div className="flex flex-col gap-3 h-full">
+          <div className="flex flex-col gap-3">
                 {/* Meeting Header */}
                 <div className="flex-shrink-0 relative">
                   {!isSharedView && !selectedMeeting.hasEnded && (
@@ -616,12 +617,12 @@ const Transcript = () => {
                     </div>
                   )}
                   <Card className="overflow-hidden h-full">
-                        <CardHeader>
-                          <div className="flex justify-between items-start">
-                            <div>
-                              <div className="flex items-center gap-3">
+                        <CardHeader className="py-3 px-4">
+                          <div className="flex flex-col gap-2 md:flex-row md:justify-between md:items-start">
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2">
                                 {selectedMeeting.platform === 'GOOGLE_MEET' && (
-                                  <img src="/google-meet.png" alt="Google Meet" className="h-6 w-6 flex-shrink-0" />
+                                  <img src="/google-meet.png" alt="Google Meet" className="h-4 w-4 flex-shrink-0" />
                                 )}
                                 {isRenaming ? (
                                   <Input
@@ -633,22 +634,23 @@ const Transcript = () => {
                                       if (e.key === 'Escape') setIsRenaming(false);
                                     }}
                                     autoFocus
-                                    className="text-2xl font-semibold leading-none tracking-tight h-auto w-auto min-w-[300px] py-0 px-0 bg-transparent border-0 border-transparent rounded-none focus:ring-0 focus:outline-none focus-visible:ring-0 focus-visible:ring-offset-0"
+                                    className="text-base font-semibold leading-none tracking-tight h-auto w-auto min-w-[200px] py-0 px-0 bg-transparent border-0 border-transparent rounded-none focus:ring-0 focus:outline-none focus-visible:ring-0 focus-visible:ring-offset-0"
                                   />
                                 ) : (
-                                  <CardTitle>{selectedMeeting.title}</CardTitle>
+                                  <CardTitle className="text-base truncate">{selectedMeeting.title}</CardTitle>
                                 )}
                               </div>
-                              <div className="flex items-center space-x-4 text-sm text-muted-foreground mt-2">
-                                <span>
-                                  {formatMeetingTime(selectedMeeting)}
-                                  {selectedMeeting.duration && ` · ${formatDuration(selectedMeeting.duration)}`}
-                                </span>
+                              <div className="flex flex-wrap items-center gap-y-1 text-sm text-muted-foreground mt-2">
                                 <Popover>
                                   <PopoverTrigger asChild>
-                                    <Button variant="ghost" size="sm" className="flex items-center transition-none">
-                                      <Users className="mr-2 h-4 w-4" />
-                                      <span>{selectedMeeting.participants.length} Participants</span>
+                                    <Button variant="ghost" size="sm" className="flex items-center transition-none h-auto py-0 px-0 hover:bg-transparent">
+                                      <span>
+                                        {formatMeetingTime(selectedMeeting)}
+                                        {selectedMeeting.duration && ` · ${formatDuration(selectedMeeting.duration)}`}
+                                        {' · '}
+                                      </span>
+                                      <Users className="mx-1 h-3.5 w-3.5" />
+                                      <span>{selectedMeeting.participants.length}</span>
                                     </Button>
                                   </PopoverTrigger>
                                   <PopoverContent className="w-56 bg-card border-border p-2">
@@ -878,36 +880,49 @@ const Transcript = () => {
                 </div>
 
                 {/* Transcript */}
-                <div className="flex-1 min-h-[400px]">
-                  <Card className="h-full flex flex-col overflow-hidden">
-                      <CardHeader className="flex flex-row items-center justify-between flex-shrink-0 py-3 px-6">
-                        <div className="flex items-center gap-2">
-                          <CardTitle>Transcript</CardTitle>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7 text-muted-foreground hover:text-foreground opacity-50 hover:opacity-100"
-                            onClick={() => {
-                              const transcriptText = messages
-                                .map(m => `${m.speaker}: ${m.content}`)
-                                .join('\n\n');
-                              navigator.clipboard.writeText(transcriptText);
-                              toast({ title: "Copied", description: "Transcript copied to clipboard" });
-                            }}
-                          >
-                            <Copy className="h-3.5 w-3.5" />
-                          </Button>
+                <div className="sticky top-[78px] z-10">
+                  <Card className="h-[calc(100vh-90px)] flex flex-col overflow-hidden">
+                      <CardHeader className="flex flex-row items-center justify-between flex-shrink-0 py-2 px-4 space-y-0">
+                        <div className="flex items-center gap-1 h-8">
+                          <CardTitle className="text-base leading-none">Transcript</CardTitle>
+                          <div className="flex items-center gap-1 ml-2">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                              onClick={() => {
+                                const transcriptText = messages
+                                  .map(m => `${m.speaker}: ${m.content}`)
+                                  .join('\n\n');
+                                navigator.clipboard.writeText(transcriptText);
+                                toast({ title: "Copied", description: "Transcript copied to clipboard" });
+                              }}
+                            >
+                              <Copy className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-muted-foreground hover:text-foreground md:hidden"
+                              onClick={() => {
+                                // Dispatch custom event to open chat drawer
+                                window.dispatchEvent(new CustomEvent('openChatDrawer'));
+                              }}
+                            >
+                              <MessageCircleMore className="h-4 w-4" />
+                            </Button>
+                          </div>
                         </div>
-                        <div className="w-52">
-                          <div className="relative flex items-center">
+                        <div className="w-32 md:w-44 flex items-center h-8">
+                          <div className="relative flex items-center w-full h-full">
                             {searchQuery ? (
-                              <X className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground cursor-pointer hover:text-foreground" onClick={clearSearch} />
+                              <X className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground cursor-pointer hover:text-foreground" onClick={clearSearch} />
                             ) : (
-                              <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                              <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
                             )}
                             <Input
                               placeholder="Search..."
-                              className="h-8 pl-8 pr-2 text-sm rounded-lg focus:ring-0 focus:outline-none focus-visible:ring-0 border border-white/20 bg-secondary"
+                              className="h-full pl-7 pr-2 text-xs rounded-md focus:ring-0 focus:outline-none focus-visible:ring-0 border border-white/20 bg-secondary"
                               value={searchQuery}
                               onChange={(e) => setSearchQuery(e.target.value)}
                               onKeyDown={(e) => e.key === 'Escape' && clearSearch()}
